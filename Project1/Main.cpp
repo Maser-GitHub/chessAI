@@ -7,8 +7,7 @@ using namespace std;
 int main() {
 	Board board;
 
-	//board.addPiece(0b0000000101000000);
-	board.initializePieces();
+	board.initializeFast();
 	board.print();
 	return 0;
 }
