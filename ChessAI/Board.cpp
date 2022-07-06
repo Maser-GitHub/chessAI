@@ -1,66 +1,74 @@
 #include "Board.h"
+#include "Piece.h"
+#include "Rook.h"
+#include "Pawn.h"
+#include "Knight.h"
+#include "Bishop.h"
+#include "Queen.h"
+#include "King.h"
+#define W true
+#define B false
 
 using namespace std;
 
 	Board::Board() {
-		initializeFast();
+		initialize();
 	}
 
 
 	void Board::initialize() {
-		for (char i=0; i < 2; i++)
-			for (char j=0; j < 8; j++)
-				addPiece(j + i * 8, i, j);
-		for (char i = 6; i < 8; i++)
-			for (char j = 0; j < 8; j++)
-				addPiece(j + (i-4) * 8, i, j);
+		addPiece(new Rook(B), 0, 0);
+		addPiece(new Knight(B), 0, 1);
+		addPiece(new Bishop(B), 0, 2);
+		addPiece(new Queen(B), 0, 3);
+		addPiece(new King(B), 0, 4);
+		addPiece(new Bishop(B), 0, 5);
+		addPiece(new Knight(B), 0, 6);
+		addPiece(new Rook(B), 0, 7);
+
+		addPiece(new Rook(W), 7, 0);
+		addPiece(new Knight(W), 7, 1);
+		addPiece(new Bishop(W), 7, 2);
+		addPiece(new Queen(W), 7, 3);
+		addPiece(new King(W), 7, 4);
+		addPiece(new Bishop(W), 7, 5);
+		addPiece(new Knight(W), 7, 6);
+		addPiece(new Rook(W), 7, 7);
+		
+		for (int i = 0; i < 8; i++) {
+			addPiece(new Pawn(B), 1, i);
+			addPiece(new Pawn(W), 6, i);
+			addPiece(nullptr, 2, i);
+			addPiece(nullptr, 3, i);
+			addPiece(nullptr, 4, i);
+			addPiece(nullptr, 5, i);
+		}
 	}
 
-	void Board::initializeFast() {
-		pieces = {64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,112,113,
-				114,115,116,117,118,119,120,121,122,123,124,125,126,127};
-	}
-
-	void Board::addPiece(char id, char x, char y) {
-		if (id< 0 || id >= 32 || x<0 || x>7 || y<0 || y>7) throw; //TODO maybe remove this for future efficency
-		char piece = 0b01000000;
-		piece += (x << 3);
-		piece += y;
-		pieces[id] = piece;
+	void Board::addPiece(Piece* piece, char x, char y) {
+		cells[x][y] = piece;
 	}
 
 	void Board::print() {
+		string write;
 		for (char i = 0; i < 8; i++) {
 			for (char j = 0; j < 8; j++) {
-				string write = "[]";
-				for (char k = 0; k < 32; k++) {
-					if ((pieces[k] & 0b00000111) == j)
-						if ((pieces[k] & 0b00111000) == i << 3)
-							if (pieces[k] & 0b01000000) {
-								write = types[k];
-								break;
-							}
-				}
+				write = cells[i][j] != nullptr ? cells[i][j]->name : "[]";
 				cout << " " << write << " ";
 			}
 			cout << endl;
 		}
 	}
 
-	vector<string> Board::getTypes() {
-		return types;
-	}
-
-	vector<char> Board::getPieces() {
-		return pieces;
-	}
-
-	void Board::move(char from, char to) {
+	/*void Board::move(char from, char to) {
 		for (vector<char>::iterator it = pieces.begin(); it != pieces.end(); it++) {
-			if (*it == from) *it = to;
+			if (*it == from) {
+				*it = to;
+				break;
+			}
 		}
-	}
-
+	}*/
+	/*
 	void Board::move(int fromx, int fromy, int tox, int toy) {
 		int from = 64, to = 64, i;
 
@@ -84,4 +92,4 @@ using namespace std;
 		
 		move(from, to);
 		
-	}
+	}*/
