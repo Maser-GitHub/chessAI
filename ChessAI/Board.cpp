@@ -45,14 +45,14 @@ using namespace std;
 		}
 	}
 
-	void Board::addPiece(Piece* piece, char x, char y) {
+	void Board::addPiece(Piece* piece, int x, int y) {
 		cells[x][y] = piece;
 	}
 
 	void Board::print() {
 		string write;
-		for (char i = 0; i < 8; i++) {
-			for (char j = 0; j < 8; j++) {
+		for (int i = 0; i < 8; i++) {
+			for (int j = 0; j < 8; j++) {
 				write = cells[i][j] != nullptr ? cells[i][j]->name : "[]";
 				cout << " " << write << " ";
 			}
@@ -60,36 +60,13 @@ using namespace std;
 		}
 	}
 
-	/*void Board::move(char from, char to) {
-		for (vector<char>::iterator it = pieces.begin(); it != pieces.end(); it++) {
-			if (*it == from) {
-				*it = to;
-				break;
-			}
-		}
-	}*/
-	/*
 	void Board::move(int fromx, int fromy, int tox, int toy) {
-		int from = 64, to = 64, i;
+		cells[tox][toy] = cells[fromx][fromy];
+		cells[fromx][fromy] = nullptr;
 
-		for (i = 0; i < 3; i++) {
-			from += (fromx % 2) << (i+3);
-			fromx >>= 1;
-		}
-		for (i = 0; i < 3; i++) {
-			from += (fromy % 2) << i;
-			fromy >>= 1;
-		}
+	}
 
-		for (i = 0; i < 3; i++) {
-			to += (tox % 2) << (i+3);
-			tox >>= 1;
-		}
-		for (i = 0; i < 3; i++) {
-			to += (toy % 2) << i;
-			toy >>= 1;
-		}
-		
-		move(from, to);
-		
-	}*/
+	vector<int> Board::possiblemoves(int x, int y) {
+		Piece *piece = cells[x][y];
+		return piece == nullptr ? vector<int>() : piece->legalmoves(cells, x, y);
+	}

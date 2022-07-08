@@ -5,5 +5,5 @@ class King : public Piece {
 public:
 	//Constructor
 	King(bool isWhite);
-	virtual int** legalmoves();
+	virtual vector<int> legalmoves(Piece *cells[8][8], int x, int y);
 };

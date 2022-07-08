@@ -1,10 +1,12 @@
 #include "King.h";
+#include <vector>
 
 King::King(bool isWhite) {
 	name = isWhite ? "wK" : "bK";
+	this->isWhite = isWhite;
 }
 
-int** King::legalmoves() {
-	int* r = new int(0);
-	return &r;
+vector<int> King::legalmoves(Piece *cells[8][8], int x, int y) {
+	vector<int> moves;
+	return moves;
 }

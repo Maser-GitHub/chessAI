@@ -1,10 +1,12 @@
 #include "Pawn.h";
+#include <vector>
 
 Pawn::Pawn(bool isWhite) {
 	name = isWhite ? "wp" : "bp";
+	this->isWhite = isWhite;
 }
 
-int** Pawn::legalmoves() {
-	int* r = new int(0);
-	return &r;
+vector<int> Pawn::legalmoves(Piece *cells[8][8], int x, int y) {
+	vector<int> moves;
+	return moves;
 }

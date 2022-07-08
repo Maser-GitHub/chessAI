@@ -1,10 +1,12 @@
 #include "Queen.h";
+#include <vector>
 
 Queen::Queen(bool isWhite) {
 	name = isWhite ? "wQ" : "bQ";
+	this->isWhite = isWhite;
 }
 
-int** Queen::legalmoves() {
-	int* r = new int(0);
-	return &r;
+vector<int> Queen::legalmoves(Piece *cells[8][8], int x, int y) {
+	vector<int> moves;
+	return moves;
 }

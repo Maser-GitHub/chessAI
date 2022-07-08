@@ -1,10 +1,12 @@
 #include "Bishop.h";
+#include <vector>
 
 Bishop::Bishop(bool isWhite) {
 	name = isWhite ? "wb" : "bb";
+	this->isWhite = isWhite;
 }
 
-int** Bishop::legalmoves() {
-	int* r = new int(0);
-	return &r;
+vector<int> Bishop::legalmoves(Piece *cells[8][8], int x, int y) {
+	vector<int> moves;
+	return moves;
 }

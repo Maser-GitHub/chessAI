@@ -5,5 +5,5 @@ class Queen : public Piece {
 public:
 	//Constructor
 	Queen(bool isWhite);
-	virtual int** legalmoves();
+	virtual vector<int> legalmoves(Piece *cells[8][8], int x, int y);
 };

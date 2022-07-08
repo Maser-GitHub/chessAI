@@ -16,12 +16,10 @@ public:
 	//Add pieces in the traditional starting position
 	void initialize();
 	//adds the piece to the board
-	void addPiece(Piece* piece, char x, char y);
+	void addPiece(Piece* piece, int x, int y);
 	//Prints the board on the terminal
-	//It is not optimized, because this will be called only by users
 	void print();
-	/*
-	void move(char from, char to);
-	//User friendly move
-	void move(int fromx, int fromy, int tox, int toy);*/
+	//Move a piece, can ovveride pieces
+	void move(int fromx, int fromy, int tox, int toy);
+	vector<int> possiblemoves(int x, int y);
 };
