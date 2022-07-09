@@ -2,10 +2,10 @@
 #include <vector>
 
 Rook::Rook(bool isWhite) {
-	name = isWhite ? "wr" : "br";
+	name = isWhite ? "wR" : "bR";
 	this->isWhite = isWhite;
 }
 
-vector<int> Rook::legalmoves(Piece *cells[8][8], int x, int y) {
-	return horizontalmoves(cells, x, y);
+vector<int> Rook::legalmoves(Piece*** cells, int x, int y) {
+	return orthogonalmoves(cells, x, y);
 }

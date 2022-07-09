@@ -10,19 +10,43 @@
 using namespace std;
 
 int main() {
-	Board board;
+	Board *board = new Board();
+	vector<Board> boards1, boards2, boards3, boards4, boardstmp;
 	string input;
 	vector<int> moves;
-	board.initialize();
+	int count = 0,i,j;
+	bool whiteTurn = true;
+	board->initialize();
 	//board.print();
 	//board.move(6, 4, 4, 4);
 	//board.move(1, 4, 3, 4);
-	board.move(0, 3, 4, 4);
-	board.print();
-	moves = board.possiblemoves(4, 4);
-	//moves.push_back(10);
-	for (int i = 0; i < moves.size(); i+=2) {
-		cout << moves[i] << " " << moves[i+1] << endl;
+	board->print();
+	cout << "After the first move" << endl;
+	boards1 = board->allPossibleBoards(whiteTurn);
+	whiteTurn = !whiteTurn;
+	for (i = 0; i < boards1.size(); i++) {
+		boardstmp = boards1[i].allPossibleBoards(whiteTurn);
+		boards2.insert(boards2.end(), boardstmp.begin(), boardstmp.end());
 	}
+	whiteTurn = !whiteTurn;
+	for (i = 0; i < boards2.size(); i++) {
+		boardstmp = boards2[i].allPossibleBoards(whiteTurn);
+		boards3.insert(boards3.end(), boardstmp.begin(), boardstmp.end());
+	}
+	whiteTurn = !whiteTurn;
+	for (i = 0; i < boards3.size(); i++) {
+		boardstmp = boards3[i].allPossibleBoards(whiteTurn);
+		boards4.insert(boards4.end(), boardstmp.begin(), boardstmp.end());
+	}
+	/*for (i = 0; i < boards3.size(); i++) {
+		for (j = i + 1; j < boards3.size(); j++) {
+			if (boards3[i].equals(boards3[j])) count++;
+		}
+	}*/
+	/*for (i = 0; i < boards3.size(); i++) {
+		boards3[i].print();
+	}*/
+	// TODO Implements cheks
+	cout << "The number of moves initially are: " << boards4.size() << endl;
 	return 0;
 }

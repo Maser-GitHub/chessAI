@@ -9,10 +9,13 @@ using namespace std;
 
 class Board {
 private:
-	Piece* cells[8][8];
+	//There exist only 32 pointers to pieces, shared among all the boards
+	Piece*** cells;
 public:
 	//Creates board
 	Board();
+	//Create board with set cells
+	Board(Piece*** cells);
 	//Add pieces in the traditional starting position
 	void initialize();
 	//adds the piece to the board
@@ -21,5 +24,11 @@ public:
 	void print();
 	//Move a piece, can ovveride pieces
 	void move(int fromx, int fromy, int tox, int toy);
-	vector<int> possiblemoves(int x, int y);
+	//Returns in a vector the possible moves from the cell xy.
+	//The vector contains the x-axis and the y-axis
+	vector<int> possibleMoves(bool whiteTurn, int x, int y);
+	//Returns a vector with all the possible board state
+	vector<Board> allPossibleBoards(bool whiteTurn);
+	//Returns true if the boards are equal
+	bool equals(Board board);
 };

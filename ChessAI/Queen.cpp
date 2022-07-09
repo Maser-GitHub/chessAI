@@ -6,9 +6,9 @@ Queen::Queen(bool isWhite) {
 	this->isWhite = isWhite;
 }
 
-vector<int> Queen::legalmoves(Piece *cells[8][8], int x, int y) {
+vector<int> Queen::legalmoves(Piece*** cells, int x, int y) {
 	vector<int> moves, movesD;
-	moves = horizontalmoves(cells, x, y);
+	moves = orthogonalmoves(cells, x, y);
 	movesD = diagonalmoves(cells, x, y);
 	moves.insert(moves.end(), movesD.begin(), movesD.end());
 	return moves;

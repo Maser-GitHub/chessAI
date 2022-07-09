@@ -1,7 +1,7 @@
 #include "Piece.h"
 
 
-bool Piece::checkAdd(Piece* cells[8][8], vector<int>& moves, int x, int y) {
+bool Piece::checkAdd(Piece*** cells, vector<int>& moves, int x, int y) {
 	if (cells[x][y] == nullptr) {
 		moves.push_back(x);
 		moves.push_back(y);
@@ -17,7 +17,7 @@ bool Piece::checkAdd(Piece* cells[8][8], vector<int>& moves, int x, int y) {
 }
 
 
-vector<int> Piece::horizontalmoves(Piece* cells[8][8], int x, int y) {
+vector<int> Piece::orthogonalmoves(Piece*** cells, int x, int y) {
 	vector<int> moves;
 	int i;
 	bool isOver=false;
@@ -39,7 +39,7 @@ vector<int> Piece::horizontalmoves(Piece* cells[8][8], int x, int y) {
 	return moves;
 }
 
-vector<int> Piece::diagonalmoves(Piece* cells[8][8], int x, int y) {
+vector<int> Piece::diagonalmoves(Piece*** cells, int x, int y) {
 	vector<int> moves;
 	int i;
 	bool isOver = false;
