@@ -6,7 +6,9 @@ King::King(bool isWhite) {
 	this->isWhite = isWhite;
 }
 
+// TODO actually checking if it is legal or not
 vector<int> King::legalmoves(Piece *cells[8][8], int x, int y) {
 	vector<int> moves;
+	
 	return moves;
 }
