@@ -35,4 +35,6 @@ public:
 	bool equals(Board board);
 	//Checks if the cell is attacked
 	bool isAttacked(bool isWhite, int x, int y);
+	//Checks if the board is in a legal state for the current color (the king is not in check)
+	bool isLegalState(bool whiteTurn);
 };

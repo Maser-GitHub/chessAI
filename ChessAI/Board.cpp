@@ -8,6 +8,8 @@
 #include "King.h"
 #define W true
 #define B false
+#include <stdio.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -85,8 +87,8 @@ vector<int> Board::possibleMoves(bool whiteTurn, int x, int y) {
 	int kx, ky;
 	bool flag = true;
 	if (piece == nullptr || cells[x][y]->isWhite != whiteTurn) return vector<int>();
-	moves = piece->legalmoves(cells, x, y);
-	if (piece->name == "wK" || piece->name == "bK") {
+	return piece->legalmoves(cells, x, y);
+	/*if (piece->name == "wK" || piece->name == "bK") {
 		for (int k = 0; k < moves.size(); k += 2) {
 			if (isAttacked(whiteTurn, moves[k], moves[k+1])) {
 				for (int e = k; e < moves.size() - 2; e += 2) {
@@ -123,11 +125,11 @@ vector<int> Board::possibleMoves(bool whiteTurn, int x, int y) {
 			delete tmp;
 		}
 	}
-	return moves;
+	return moves;*/
 }
 
 vector<Board> Board::allPossibleBoards(bool whiteTurn) {
-	vector<Board> boards;
+	vector<Board> boards, legalBoards;
 	vector<int> moves;
 	for (int i = 0; i <= 7; i++) {
 		for (int j = 0; j <= 7; j++) {
@@ -139,8 +141,10 @@ vector<Board> Board::allPossibleBoards(bool whiteTurn) {
 			}
 		}
 	}
-	return boards;
+	copy_if(boards.begin(), boards.end(), back_inserter(legalBoards), [&](Board b) {return b.isLegalState(whiteTurn);});
+	return legalBoards;
 }
+
 
 bool Board::equals(Board board) {
 	for (int i = 0; i <= 7; i++) {
@@ -151,19 +155,27 @@ bool Board::equals(Board board) {
 	return true;
 }
 
-
-bool Board::isAttacked(bool isWhite, int x, int y) {
+bool Board::isLegalState(bool whiteTurn) {
+	bool flag = true;
+	int kx, ky;
 	vector<int> moves;
-	int i;
-	for (i = 0; i <= 7; i++) {
-		if (cells[i][y] != nullptr && ((isWhite && (cells[i][y]->name == "bQ" || cells[i][y]->name == "bR")) || (!isWhite && (cells[i][y]->name == "wQ" || cells[i][y]->name == "wR")))) {
-			return true;
+	for (int i = 0; i <= 7 && flag; i++) {
+		for (int j = 0; j <= 7 && flag; j++) {
+			if (cells[i][j] != nullptr && (cells[i][j]->name == "wK" && whiteTurn || cells[i][j]->name == "bK" && !whiteTurn)) {
+				kx = i;
+				ky = j;
+				flag = false;
+			}
 		}
 	}
-	for (i = 0; i <= 7; i++) {
-		if (cells[x][i] != nullptr && ((isWhite && (cells[x][i]->name == "bQ" || cells[x][i]->name == "bR")) || (!isWhite && (cells[x][i]->name == "wQ" || cells[x][i]->name == "wR")))) {
-			return true;
+	// TODO optimize
+	for (int i = 0; i <= 7; i++) {
+		for (int j = 0; j <= 7; j++) {
+			moves = possibleMoves(!whiteTurn, i, j);
+			for (int k = 0; k < moves.size(); k += 2) {
+				if (moves[k] == kx && moves[k + 1] == ky) return false;
+			}
 		}
 	}
-	return false;
+	return true;
 }
