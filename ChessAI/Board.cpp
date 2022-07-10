@@ -81,8 +81,49 @@ void Board::move(int fromx, int fromy, int tox, int toy) {
 
 vector<int> Board::possibleMoves(bool whiteTurn, int x, int y) {
 	Piece *piece = cells[x][y];
+	vector<int> moves;
+	int kx, ky;
+	bool flag = true;
 	if (piece == nullptr || cells[x][y]->isWhite != whiteTurn) return vector<int>();
-	return piece->legalmoves(cells, x, y);
+	moves = piece->legalmoves(cells, x, y);
+	if (piece->name == "wK" || piece->name == "bK") {
+		for (int k = 0; k < moves.size(); k += 2) {
+			if (isAttacked(whiteTurn, moves[k], moves[k+1])) {
+				for (int e = k; e < moves.size() - 2; e += 2) {
+					moves[e] = moves[e + 2];
+					moves[e + 1] = moves[e + 3];
+					moves.pop_back();
+					moves.pop_back();
+				}
+			}
+		}
+	}
+	else {
+		for (int i = 0; i <= 7 && flag; i++) {
+			for (int j = 0; j <= 7 && flag; j++) {
+				if (cells[i][j] != nullptr && (cells[i][j]->name == "wK" && whiteTurn || cells[i][j]->name == "bK" && !whiteTurn)) {
+					kx = i;
+					ky = j;
+					flag = false;
+				}
+			}
+		}
+		// TODO optimize or change completely
+		for (int k = 0; k < moves.size(); k += 2) {
+			Board* tmp = new Board(cells);
+			tmp->move(x, y, moves[k], moves[k + 1]);
+			if (tmp->isAttacked(whiteTurn, kx, ky)) { 
+				for (int e = k; e < moves.size() - 2; e += 2) {
+					moves[e] = moves[e + 2];
+					moves[e + 1] = moves[e + 3];
+					moves.pop_back();
+					moves.pop_back();
+				}
+			}
+			delete tmp;
+		}
+	}
+	return moves;
 }
 
 vector<Board> Board::allPossibleBoards(bool whiteTurn) {
@@ -108,4 +149,21 @@ bool Board::equals(Board board) {
 		}
 	}
 	return true;
+}
+
+
+bool Board::isAttacked(bool isWhite, int x, int y) {
+	vector<int> moves;
+	int i;
+	for (i = 0; i <= 7; i++) {
+		if (cells[i][y] != nullptr && ((isWhite && (cells[i][y]->name == "bQ" || cells[i][y]->name == "bR")) || (!isWhite && (cells[i][y]->name == "wQ" || cells[i][y]->name == "wR")))) {
+			return true;
+		}
+	}
+	for (i = 0; i <= 7; i++) {
+		if (cells[x][i] != nullptr && ((isWhite && (cells[x][i]->name == "bQ" || cells[x][i]->name == "bR")) || (!isWhite && (cells[x][i]->name == "wQ" || cells[x][i]->name == "wR")))) {
+			return true;
+		}
+	}
+	return false;
 }
