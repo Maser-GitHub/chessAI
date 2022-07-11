@@ -12,7 +12,7 @@ private:
 	//There exist only 32 pointers to pieces, shared among all the boards
 	Piece*** cells;
 	// from right to left, the first 16 bits represent if the pawn can receive EnPassant and then CastleRight,CastleLeft both for white and black 
-	int canCastleAndEnPassant;
+	int canCastleAndEnPassant=0;
 public:
 	//Creates board
 	Board();

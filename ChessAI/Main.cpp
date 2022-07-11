@@ -6,14 +6,14 @@
 #include "Util.h"
 
 
+void moves(bool, vector<Board>&, vector<Board>&);
 
 using namespace std;
 
-int main() {
+int ex_main() {
 	Board *board = new Board();
-	vector<Board> boards1, boards2, boards3, boards4, boards5, boardstmp;
+	vector<Board> boards1, boards2, boards3, boards4, boards5;
 	string input;
-	vector<int> moves;
 	int count = 0,i,j;
 	bool whiteTurn = true;
 	board->initialize();
@@ -24,25 +24,13 @@ int main() {
 	cout << "After the first move" << endl;
 	boards1 = board->allPossibleBoards(whiteTurn);
 	whiteTurn = !whiteTurn;
-	for (i = 0; i < boards1.size(); i++) {
-		boardstmp = boards1[i].allPossibleBoards(whiteTurn);
-		boards2.insert(boards2.end(), boardstmp.begin(), boardstmp.end());
-	}
+	moves(whiteTurn, boards1, boards2);
 	whiteTurn = !whiteTurn;
-	for (i = 0; i < boards2.size(); i++) {
-		boardstmp = boards2[i].allPossibleBoards(whiteTurn);
-		boards3.insert(boards3.end(), boardstmp.begin(), boardstmp.end());
-	}
+	moves(whiteTurn, boards2, boards3);
 	whiteTurn = !whiteTurn;
-	for (i = 0; i < boards3.size(); i++) {
-		boardstmp = boards3[i].allPossibleBoards(whiteTurn);
-		boards4.insert(boards4.end(), boardstmp.begin(), boardstmp.end());
-	}
+	moves(whiteTurn, boards3, boards4);
 	whiteTurn = !whiteTurn;
-	for (i = 0; i < boards4.size(); i++) {
-		boardstmp = boards4[i].allPossibleBoards(whiteTurn);
-		boards5.insert(boards5.end(), boardstmp.begin(), boardstmp.end());
-	}
+	
 	/*for (i = 0; i < boards3.size(); i++) {
 		for (j = i + 1; j < boards3.size(); j++) {
 			if (boards3[i].equals(boards3[j])) count++;
@@ -52,6 +40,14 @@ int main() {
 		boards3[i].print();
 	}*/
 	// TODO Implements cheks
-	cout << "The number of moves initially are: " << boards5.size() << endl;
+	cout << "The number of moves initially are: " << boards4.size() << endl;
 	return 0;
+}
+
+void moves(bool whiteTurn, vector<Board>& in, vector<Board>& out) {
+	vector<Board> boardstmp;
+	for (int i = 0; i < in.size(); i++) {
+		boardstmp = in[i].allPossibleBoards(whiteTurn);
+		out.insert(out.end(), boardstmp.begin(), boardstmp.end());
+	}
 }
