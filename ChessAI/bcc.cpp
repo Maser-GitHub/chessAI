@@ -1,13 +1,22 @@
 // CHANGED APPROACH USING BITBOARD
 // Following methods on the site www.chessprogramming.org
-
+// TODO remove global variables
 #include <iostream>
 
 using namespace std;
 
-#define U64 unsigned long long	
+#define U64 unsigned long long
 
-// enums 
+// enums
+
+//to mask the flag of castling
+enum {
+	wk = 1, wq = 2, bk = 4, bq = 8
+};
+
+// encode pieces, upper for white
+enum { P, N, B, R, Q, K, p, n, b, r, q, k };
+
 
 enum enumSquare {
 	a8, b8, c8, d8, e8, f8, g8, h8,
@@ -17,7 +26,7 @@ enum enumSquare {
 	a4, b4, c4, d4, e4, f4, g4, h4,
 	a3, b3, c3, d3, e3, f3, g3, h3,
 	a2, b2, c2, d2, e2, f2, g2, h2,
-	a1, b1, c1, d1, e1, f1, g1, h1
+	a1, b1, c1, d1, e1, f1, g1, h1, no_sq
 };
 
 const char* square_to_coordinate[] = {
@@ -31,18 +40,47 @@ const char* square_to_coordinate[] = {
 	"a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"
 };
 
-enum enumColor {
-	white, black
+enum enumSlider {
+	rook, bishop
 };
 
+enum enumColor {
+	white, black, both
+};
+
+
+//DEFINITION BITBOARDS
+
+// piece bitboards
+U64 bitboards[12];
+
+// occupancy bitboards
+U64 occupancies[3];
+
+// side to move
+int side=white;
+
+// enpassant square
+int enpassant = no_sq;
+
+// castling rights
+int castle;
+
+// ASCII pieces (+1 for the terminator)
+char ascii_pieces[12 + 1] = "PNBRQKpnbrqk";
+
+// convert ASCII character pieces to encoded constants
+int char_pieces[128];
+
+//Ascii_pieces from index to ascii. char_pieces from ascii to index
 
 // BIT MANIPULATION
 
 //set get pop macros
 
-#define set_bit(bitboard, square) (bitboard |= (1ULL << square))
-#define get_bit(bitboard, square) (bitboard & (1ULL << square))
-#define pop_bit(bitboard, square) (bitboard &= (~(1ULL << square)))
+#define set_bit(bitboard, square) ((bitboard) |= (1ULL << (square)))
+#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
+#define pop_bit(bitboard, square) ((bitboard) &= (~(1ULL << (square))))
 #define count_bits(bitboard) __builtin_popcountll(bitboard)
 
 
@@ -98,7 +136,7 @@ void print_bitboard(U64 bitboard) {
 
 
 
-// ATTACKS 
+// ATTACKS
 
 // Mask all that is not a-file
 const U64 not_a_file = 0xfefefefefefefefeULL;
@@ -110,7 +148,7 @@ const U64 not_ab_file = 0xfcfcfcfcfcfcfcfcULL;
 const U64 not_hg_file = 0x3f3f3f3f3f3f3f3fULL;
 
 
-// number of squares attacked from bishop 
+// number of squares attacked from bishop
 const int bishop_relevant_bits[64]{
 	 6, 5, 5, 5, 5, 5, 5, 6,
 	 5, 5, 5, 5, 5, 5, 5, 5,
@@ -133,6 +171,8 @@ const int rook_relevant_bits[64]{
 	11, 10, 10, 10, 10, 10, 10, 11,
 	12, 11, 11, 11, 11, 11, 11, 12
 };
+
+//Those magic numbers are needed in order to filter the rook attack given the current occupancy of the board
 
 // rook magic numbers
 U64 rook_magic_numbers[64] = {
@@ -283,13 +323,18 @@ U64 knight_attacks[64];
 
 U64 king_attacks[64];
 
-//Bishop attacks table[square]
+//Bishop attack masks table[square]
+U64 bishop_masks[64];
 
-U64 bishop_attacks[64];
+// Bishop attacks table[square][occupancies]
+U64 bishop_attacks[64][512];
 
-//Rook attacks table[square]
+//Rook attacks mask[square]
 
-U64 rook_attacks[64];
+U64 rook_masks[64];
+
+//Rook attacks table[square][occupancies]
+U64 rook_attacks[64][4096];
 
 
 //generate mask pawn attack
@@ -460,28 +505,6 @@ U64 rook_attacks_on_the_fly(int square, U64 block) {
 	return attacks;
 }
 
-void init_leaper_attacks() {
-	for (int square = 0; square < 64; square++) {
-		pawn_attacks[white][square] = mask_pawn_attacks(white, square);
-		pawn_attacks[black][square] = mask_pawn_attacks(black, square);
-	}
-	for (int square = 0; square < 64; square++) {
-		knight_attacks[square] = mask_knight_attacks(square);
-	}
-	for (int square = 0; square < 64; square++) {
-		king_attacks[square] = mask_king_attacks(square);
-	}
-	for (int square = 0; square < 64; square++) {
-		bishop_attacks[square] = mask_bishop_attacks(square);
-	}
-	for (int square = 0; square < 64; square++) {
-		rook_attacks[square] = mask_rook_attacks(square);
-	}
-}
-
-
-
-
 //Sets the various possible combination of mask
 // TODO if inefficient try moving in the count of the bits
 // The magic starts from here
@@ -503,20 +526,96 @@ U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
 }
 
 
+void init_leaper_attacks() {
+	for (int square = 0; square < 64; square++) {
+		pawn_attacks[white][square] = mask_pawn_attacks(white, square);
+		pawn_attacks[black][square] = mask_pawn_attacks(black, square);
+	}
+	for (int square = 0; square < 64; square++) {
+		knight_attacks[square] = mask_knight_attacks(square);
+	}
+	for (int square = 0; square < 64; square++) {
+		king_attacks[square] = mask_king_attacks(square);
+	}
+}
+
+void init_slider_attacks(int bishop){
+	for (int square = 0; square < 64; square++) {
+		bishop_masks[square] = mask_bishop_attacks(square);
+		rook_masks[square] = mask_rook_attacks(square);
+		//Init current mask
+		U64 attack_mask = bishop ? bishop_masks[square] : rook_masks[square];
+
+		//init occupancy bit count
+		int relevant_bits = count_bits(attack_mask);
+
+		int occupancy_indices = (1 << relevant_bits);
+
+		//loop occupancy_indices
+		for(int index = 0; index < occupancy_indices; index++){
+			if(bishop){//bishop
+				U64 occupancy = set_occupancy(index, relevant_bits, attack_mask);
+
+				int magic_index = (occupancy * bishop_magic_numbers[square]) >> (64 - bishop_relevant_bits[square]);
+
+				bishop_attacks[square][magic_index] = bishop_attacks_on_the_fly(square, occupancy);
+			}else{//rook
+				U64 occupancy = set_occupancy(index, relevant_bits, attack_mask);
+
+				int magic_index = (occupancy * rook_magic_numbers[square]) >> (64 - rook_relevant_bits[square]);
+
+				rook_attacks[square][magic_index] = rook_attacks_on_the_fly(square, occupancy);
+			}
+		}
+	}
+}
+
+//get bishop attacks
+static inline U64 get_bishop_attacks(int square, U64 occupancy){
+	// getting bishop attack given the current occupancy
+	occupancy &= bishop_masks[square];
+	occupancy *= bishop_magic_numbers[square];
+	occupancy >>= 64 - bishop_relevant_bits[square];
+
+	return bishop_attacks[square][occupancy];
+}
+
+//get rook attacks
+static inline U64 get_rook_attacks(int square, U64 occupancy){
+	// getting bishop attack given the current occupancy
+	occupancy &= rook_masks[square];
+	occupancy *= rook_magic_numbers[square];
+	occupancy >>= 64 - rook_relevant_bits[square];
+
+	return rook_attacks[square][occupancy];
+}
+
+
+init_char(){
+ char_pieces['P'] = P;
+ char_pieces['N'] = N;
+ char_pieces['B'] = B;
+ char_pieces['R'] = R;
+ char_pieces['Q'] = Q;
+ char_pieces['K'] = K;
+ char_pieces['p'] = p;
+ char_pieces['n'] = n;
+ char_pieces['b'] = b;
+ char_pieces['r'] = r;
+ char_pieces['q'] = q;
+ char_pieces['k'] = k;
+}
+
+void init_all(){
+	init_char();
+	init_leaper_attacks();
+	init_slider_attacks(bishop);
+	init_slider_attacks(rook);
+}
 
 int main() {
 	U64 bitboard = 0ULL;
 	//init
-	init_leaper_attacks();
-
-	for (int rank = 0; rank < 8; rank++) {
-		for (int file = 0; file < 8; file++) {
-			int square = rank + file * 8;
-
-			cout << " " << count_bits(mask_rook_attacks(square)) << ",";
-		}
-		cout << endl;
-	}
-
+	init_all();
 	return 0;
 }
