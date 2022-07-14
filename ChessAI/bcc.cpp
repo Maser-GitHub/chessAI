@@ -58,7 +58,7 @@ U64 bitboards[12];
 U64 occupancies[3];
 
 // side to move
-int side=white;
+int side = white;
 
 // enpassant square
 int enpassant = no_sq;
@@ -82,6 +82,13 @@ int char_pieces[128];
 #define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
 #define pop_bit(bitboard, square) ((bitboard) &= (~(1ULL << (square))))
 #define count_bits(bitboard) __builtin_popcountll(bitboard)
+
+// FEN dedug positions
+#define empty_board "8/8/8/8/8/8/8/8 w - - "
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
 
 
 //Convert the file in .c and use __builtin_popcountll(bitboard) if bottleneck
@@ -134,6 +141,146 @@ void print_bitboard(U64 bitboard) {
 	cout << "   Bitboard: " << bitboard << endl;
 }
 
+//It uses global variables
+void print_board() {
+	int square, piece;
+	int rank, file;
+	for (rank = 0; rank < 8; rank++) {
+		for (file = 0; file < 8; file++) {
+			square = rank * 8 + file;
+
+			piece = -1;
+
+			//print ranks
+			if (!file) {
+				cout << 8 - rank << "  ";
+			}
+
+			for (int bb_piece = P; bb_piece <= k; bb_piece++) {
+				if (get_bit(bitboards[bb_piece], square)) piece = bb_piece;
+			}
+
+			cout << ((piece == -1) ? '.' : ascii_pieces[piece]) << " ";
+		}
+		cout << endl;
+	}
+	//print files
+	cout << endl << "   a b c d e f g h" << endl << endl;
+
+	cout << "Side: " << (!side ? "White" : "Black") << endl;
+	cout << "Enpassant: " << ((enpassant != no_sq) ? square_to_coordinate[enpassant] : "None") << endl;
+	cout << "Castling: " << ((castle & wk) ? 'K' : '-') << ((castle & wq) ? 'Q' : '-') <<
+		((castle & bk) ? 'k' : '-') << ((castle & bq) ? 'q' : '-') << endl;
+}
+
+
+//parse FEN
+
+void parse_FEN(const char* fen) {
+	//reset board
+	memset(bitboards, 0ULL, sizeof(bitboards));
+	memset(occupancies, 0ULL, sizeof(occupancies));
+	side = white;
+	enpassant = no_sq;
+	castle = 0;
+
+	for (int rank = 0; rank < 8; rank++) {
+		for (int file = 0; file < 8; file++) {
+			int square = rank * 8 + file;
+
+			if (*fen >= 'a' && *fen <= 'z' || *fen >= 'A' && *fen <= 'Z') {
+				int piece = char_pieces[*fen];
+
+				set_bit(bitboards[piece], square);
+
+				fen++;
+			}
+			
+			if (*fen >= '0' && *fen <= '9') {
+				//atoi for single digit
+				int offset = (*fen) - '0';
+
+				int piece = -1;
+
+				//Checks for corner case where where the file starts with no piece
+				for (int bb_piece = P; bb_piece <= k; bb_piece++)
+				{
+					// if there is a piece on current square
+					if (get_bit(bitboards[bb_piece], square))
+						// get piece code
+						piece = bb_piece;
+				}
+
+				// on empty current square
+				if (piece == -1)
+					// decrement file
+					file--;
+
+				file += offset;
+
+				fen++;
+			}
+
+			if (*fen == '/') fen++;
+		}
+	}
+	// got to parsing side to move (increment pointer to FEN string)
+	fen++;
+
+	// parse side to move
+	(*fen == 'w') ? (side = white) : (side = black);
+
+	// go to parsing castling rights
+	fen += 2;
+
+	// parse castling rights
+	while (*fen != ' ')
+	{
+		switch (*fen)
+		{
+		case 'K': castle |= wk; break;
+		case 'Q': castle |= wq; break;
+		case 'k': castle |= bk; break;
+		case 'q': castle |= bq; break;
+		default: break;
+		}
+
+		// increment pointer to FEN string
+		fen++;
+	}
+
+	// got to parsing enpassant square (increment pointer to FEN string)
+	fen++;
+
+	// parse enpassant square
+	if (*fen != '-')
+	{
+		// parse enpassant file & rank
+		int file = fen[0] - 'a';
+		int rank = 8 - (fen[1] - '0');
+
+		// init enpassant square
+		enpassant = rank * 8 + file;
+	}
+	else {
+		enpassant = no_sq;
+	}
+
+	// loop over white pieces bitboards
+	for (int piece = P; piece <= K; piece++)
+		// populate white occupancy bitboard
+		occupancies[white] |= bitboards[piece];
+
+	// loop over black pieces bitboards
+	for (int piece = p; piece <= k; piece++)
+		// populate white occupancy bitboard
+		occupancies[black] |= bitboards[piece];
+
+	// init all occupancies
+	occupancies[both] |= occupancies[white];
+	occupancies[both] |= occupancies[black];
+
+}
 
 
 // ATTACKS
@@ -539,7 +686,7 @@ void init_leaper_attacks() {
 	}
 }
 
-void init_slider_attacks(int bishop){
+void init_slider_attacks(int bishop) {
 	for (int square = 0; square < 64; square++) {
 		bishop_masks[square] = mask_bishop_attacks(square);
 		rook_masks[square] = mask_rook_attacks(square);
@@ -552,14 +699,15 @@ void init_slider_attacks(int bishop){
 		int occupancy_indices = (1 << relevant_bits);
 
 		//loop occupancy_indices
-		for(int index = 0; index < occupancy_indices; index++){
-			if(bishop){//bishop
+		for (int index = 0; index < occupancy_indices; index++) {
+			if (bishop) {//bishop
 				U64 occupancy = set_occupancy(index, relevant_bits, attack_mask);
 
 				int magic_index = (occupancy * bishop_magic_numbers[square]) >> (64 - bishop_relevant_bits[square]);
 
 				bishop_attacks[square][magic_index] = bishop_attacks_on_the_fly(square, occupancy);
-			}else{//rook
+			}
+			else {//rook
 				U64 occupancy = set_occupancy(index, relevant_bits, attack_mask);
 
 				int magic_index = (occupancy * rook_magic_numbers[square]) >> (64 - rook_relevant_bits[square]);
@@ -571,7 +719,7 @@ void init_slider_attacks(int bishop){
 }
 
 //get bishop attacks
-static inline U64 get_bishop_attacks(int square, U64 occupancy){
+static inline U64 get_bishop_attacks(int square, U64 occupancy) {
 	// getting bishop attack given the current occupancy
 	occupancy &= bishop_masks[square];
 	occupancy *= bishop_magic_numbers[square];
@@ -581,7 +729,7 @@ static inline U64 get_bishop_attacks(int square, U64 occupancy){
 }
 
 //get rook attacks
-static inline U64 get_rook_attacks(int square, U64 occupancy){
+static inline U64 get_rook_attacks(int square, U64 occupancy) {
 	// getting bishop attack given the current occupancy
 	occupancy &= rook_masks[square];
 	occupancy *= rook_magic_numbers[square];
@@ -590,27 +738,46 @@ static inline U64 get_rook_attacks(int square, U64 occupancy){
 	return rook_attacks[square][occupancy];
 }
 
+//get queen attacks
+static inline U64 get_queen_attacks(int square, U64 occupancy) {
+	U64 b_occupancy = occupancy;
+	U64 r_occupancy = occupancy;
 
-init_char(){
- char_pieces['P'] = P;
- char_pieces['N'] = N;
- char_pieces['B'] = B;
- char_pieces['R'] = R;
- char_pieces['Q'] = Q;
- char_pieces['K'] = K;
- char_pieces['p'] = p;
- char_pieces['n'] = n;
- char_pieces['b'] = b;
- char_pieces['r'] = r;
- char_pieces['q'] = q;
- char_pieces['k'] = k;
+	// getting bishop attack given the current occupancy
+	b_occupancy &= bishop_masks[square];
+	b_occupancy *= bishop_magic_numbers[square];
+	b_occupancy >>= 64 - bishop_relevant_bits[square];
+
+	// getting rook attack given the current occupancy
+	r_occupancy &= rook_masks[square];
+	r_occupancy *= rook_magic_numbers[square];
+	r_occupancy >>= 64 - rook_relevant_bits[square];
+
+	return bishop_attacks[square][b_occupancy] | rook_attacks[square][r_occupancy];
 }
 
-void init_all(){
+
+void init_char() {
+	char_pieces['P'] = P;
+	char_pieces['N'] = N;
+	char_pieces['B'] = B;
+	char_pieces['R'] = R;
+	char_pieces['Q'] = Q;
+	char_pieces['K'] = K;
+	char_pieces['p'] = p;
+	char_pieces['n'] = n;
+	char_pieces['b'] = b;
+	char_pieces['r'] = r;
+	char_pieces['q'] = q;
+	char_pieces['k'] = k;
+}
+
+void init_all() {
 	init_char();
 	init_leaper_attacks();
 	init_slider_attacks(bishop);
 	init_slider_attacks(rook);
+	//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
 }
 
 int main() {
