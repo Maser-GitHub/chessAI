@@ -756,6 +756,52 @@ static inline U64 get_queen_attacks(int square, U64 occupancy) {
 	return bishop_attacks[square][b_occupancy] | rook_attacks[square][r_occupancy];
 }
 
+// TODO could be optimized
+//Checks if square is attacked
+static inline bool is_square_attacked(int square, int side)
+{
+	// attacked by white pawns
+	if ((side == white) && (pawn_attacks[black][square] & bitboards[P])) return true;
+
+	// attacked by black pawns
+	if ((side == black) && (pawn_attacks[white][square] & bitboards[p])) return true;
+
+	// attacked by knights
+	if (knight_attacks[square] & ((side == white) ? bitboards[N] : bitboards[n])) return true;
+
+	// attacked diagonally
+	if (get_bishop_attacks(square, occupancies[both]) & ((side == white) ? (bitboards[B] | bitboards[Q]) : (bitboards[b] | bitboards[q]))) return true;
+
+	// attacked orthogonally
+	if (get_rook_attacks(square, occupancies[both]) & ((side == white) ? (bitboards[R] | bitboards[Q]) : (bitboards[r] | bitboards[q]))) return true;
+
+	// attacked by kings
+	if (king_attacks[square] & ((side == white) ? bitboards[K] : bitboards[k])) return true;
+
+	// by default return false
+	return false;
+}
+
+void print_attacked_squares(int side)
+{
+	printf("\n");
+
+	for (int rank = 0; rank < 8; rank++)
+	{
+		for (int file = 0; file < 8; file++)
+		{
+			int square = rank * 8 + file;
+
+			if (!file)
+				cout << " " << 8 - rank << " ";
+
+			// check whether current square is attacked or not
+			cout << " " << (is_square_attacked(square, side) ? 1 : 0);
+		}
+		cout << endl;
+	}
+	cout << "    a b c d e f g h" << endl;;
+}
 
 void init_char() {
 	char_pieces['P'] = P;
@@ -784,5 +830,8 @@ int main() {
 	U64 bitboard = 0ULL;
 	//init
 	init_all();
+	parse_FEN(tricky_position);
+
+	print_attacked_squares(black);
 	return 0;
 }
