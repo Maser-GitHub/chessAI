@@ -2,6 +2,7 @@
 // Following methods on the site www.chessprogramming.org
 // TODO remove global variables
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
@@ -29,7 +30,7 @@ enum enumSquare {
 	a1, b1, c1, d1, e1, f1, g1, h1, no_sq
 };
 
-const char* square_to_coordinate[] = {
+const char* square_to_coordinates[] = {
 	"a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 	"a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
 	"a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
@@ -83,12 +84,50 @@ int char_pieces[128];
 #define pop_bit(bitboard, square) ((bitboard) &= (~(1ULL << (square))))
 #define count_bits(bitboard) __builtin_popcountll(bitboard)
 
+// Definition for moves
+
+#define encode_move(source, target, piece, promoted, capture, double, enpassant, castling) \
+    (source) |          \
+    (target << 6) |     \
+    (piece << 12) |     \
+    (promoted << 16) |  \
+    (capture << 20) |   \
+    (double << 21) |    \
+    (enpassant << 22) | \
+    (castling << 23)    \
+
+// extract source square
+#define get_move_source(move) (move & 0x3f)
+
+// extract target square
+#define get_move_target(move) ((move & 0xfc0) >> 6)
+
+// extract piece
+#define get_move_piece(move) ((move & 0xf000) >> 12)
+
+// extract promoted piece
+#define get_move_promoted(move) ((move & 0xf0000) >> 16)
+
+// extract capture flag
+#define get_move_capture(move) (move & 0x100000)
+
+// extract double pawn push flag
+#define get_move_double(move) (move & 0x200000)
+
+// extract enpassant flag
+#define get_move_enpassant(move) (move & 0x400000)
+
+// extract castling flag
+#define get_move_castling(move) (move & 0x800000)
+
+
+// TODO make this array or dynamic list if bottle neck
+vector<int> moves;
+
+
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 w - - "
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
-#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
-#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
-#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
 
 
 //Convert the file in .c and use __builtin_popcountll(bitboard) if bottleneck
@@ -168,7 +207,7 @@ void print_board() {
 	cout << endl << "   a b c d e f g h" << endl << endl;
 
 	cout << "Side: " << (!side ? "White" : "Black") << endl;
-	cout << "Enpassant: " << ((enpassant != no_sq) ? square_to_coordinate[enpassant] : "None") << endl;
+	cout << "Enpassant: " << ((enpassant != no_sq) ? square_to_coordinates[enpassant] : "None") << endl;
 	cout << "Castling: " << ((castle & wk) ? 'K' : '-') << ((castle & wq) ? 'Q' : '-') <<
 		((castle & bk) ? 'k' : '-') << ((castle & bq) ? 'q' : '-') << endl;
 }
@@ -195,7 +234,7 @@ void parse_FEN(const char* fen) {
 
 				fen++;
 			}
-			
+
 			if (*fen >= '0' && *fen <= '9') {
 				//atoi for single digit
 				int offset = (*fen) - '0';
@@ -483,7 +522,6 @@ U64 rook_masks[64];
 //Rook attacks table[square][occupancies]
 U64 rook_attacks[64][4096];
 
-
 //generate mask pawn attack
 U64 mask_pawn_attacks(int side, int square) {
 	U64 attacks = 0ULL;
@@ -652,6 +690,7 @@ U64 rook_attacks_on_the_fly(int square, U64 block) {
 	return attacks;
 }
 
+
 //Sets the various possible combination of mask
 // TODO if inefficient try moving in the count of the bits
 // The magic starts from here
@@ -803,35 +842,144 @@ void print_attacked_squares(int side)
 	cout << "    a b c d e f g h" << endl;;
 }
 
-void init_char() {
-	char_pieces['P'] = P;
-	char_pieces['N'] = N;
-	char_pieces['B'] = B;
-	char_pieces['R'] = R;
-	char_pieces['Q'] = Q;
-	char_pieces['K'] = K;
-	char_pieces['p'] = p;
-	char_pieces['n'] = n;
-	char_pieces['b'] = b;
-	char_pieces['r'] = r;
-	char_pieces['q'] = q;
-	char_pieces['k'] = k;
+
+//IMPLEMENTATION OF ALL MOVES
+
+static inline void generate_moves() {
+	//init source-target
+	int source_square, target_square;
+	//define bb copy
+	U64 bitboard, attacks;
+
+	if (side == white) {
+		//PAWNS
+		bitboard = bitboards[P];
+
+		while (bitboard)
+		{
+			// init source square
+			source_square = get_ls1b_index(bitboard);
+
+			// init target square
+			target_square = source_square - 8;
+
+			// generate quite pawn moves
+			if (!(target_square < a8) && !get_bit(occupancies[both], target_square))
+			{
+				// pawn promotion
+				if (source_square >= a7 && source_square <= h7)
+				{
+					moves.push_back(encode_move(source_square, target_square, P, Q, 0, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, R, 0, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, B, 0, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, N, 0, 0, 0, 0));
+				}
+
+				else
+				{
+					// one square ahead pawn move
+					moves.push_back(encode_move(source_square, target_square, P, 0, 0, 0, 0, 0));
+
+					// two squares ahead pawn move
+					if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancies[both], target_square - 8))
+						moves.push_back(encode_move(source_square, target_square - 8, P, 0, 0, 1, 0, 0));
+				}
+			}
+			// init pawn attacks bitboard
+			attacks = pawn_attacks[side][source_square] & occupancies[black];
+
+			// generate pawn captures
+			while (attacks)
+			{
+				// init target square
+				target_square = get_ls1b_index(attacks);
+
+				// pawn promotion
+				if (source_square >= a7 && source_square <= h7)
+				{
+					moves.push_back(encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
+					moves.push_back(encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
+				}
+
+				else
+					// one square ahead pawn move
+					moves.push_back(encode_move(source_square, target_square, P, 0, 1, 0, 0, 0));
+
+				// pop ls1b of the pawn attacks
+				pop_bit(attacks, target_square);
+			}
+
+			// generate enpassant captures
+			if (enpassant != no_sq)
+			{
+				// lookup pawn attacks and bitwise AND with enpassant square (bit)
+				U64 enpassant_attacks = pawn_attacks[side][source_square] & (1ULL << enpassant);
+
+				// make sure enpassant capture available
+				if (enpassant_attacks)
+				{
+					// init enpassant capture target square
+					int target_enpassant = get_ls1b_index(enpassant_attacks);
+					moves.push_back(encode_move(source_square, target_enpassant, P, 0, 1, 0, 1, 0));
+				}
+			}
+
+			// pop ls1b from piece bitboard copy
+			pop_bit(bitboard, source_square);
+		}
+	}
 }
 
-void init_all() {
-	init_char();
-	init_leaper_attacks();
-	init_slider_attacks(bishop);
-	init_slider_attacks(rook);
-	//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
+void print_moves()
+{
+	cout << "move    piece     capture   double    enpass    castling" << endl;
+
+	for (int move : moves) {
+		cout << square_to_coordinates[get_move_source(move)];
+		cout << square_to_coordinates[get_move_target(move)] << "   ";
+		cout << (get_move_promoted(move) ? ascii_pieces[get_move_promoted(move)] : ' ') << "  ";
+		cout << ascii_pieces[get_move_piece(move)] << "          ";
+		cout << (get_move_capture(move) ? 1 : 0) << "         ";
+		cout << (get_move_double(move) ? 1 : 0) << "         " ;
+		cout << (get_move_enpassant(move) ? 1 : 0) << "         ";
+		cout << (get_move_castling(move) ? 1 : 0);
+		cout << endl;
+	}
 }
 
-int main() {
-	U64 bitboard = 0ULL;
-	//init
-	init_all();
-	parse_FEN(tricky_position);
 
-	print_attacked_squares(black);
-	return 0;
-}
+	void init_char() {
+		char_pieces['P'] = P;
+		char_pieces['N'] = N;
+		char_pieces['B'] = B;
+		char_pieces['R'] = R;
+		char_pieces['Q'] = Q;
+		char_pieces['K'] = K;
+		char_pieces['p'] = p;
+		char_pieces['n'] = n;
+		char_pieces['b'] = b;
+		char_pieces['r'] = r;
+		char_pieces['q'] = q;
+		char_pieces['k'] = k;
+	}
+
+	void init_all() {
+		init_char();
+		init_leaper_attacks();
+		init_slider_attacks(bishop);
+		init_slider_attacks(rook);
+		//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
+	}
+
+	int main() {
+		U64 bitboard = 0ULL;
+		//init
+		init_all();
+		parse_FEN(start_position);
+		generate_moves();
+		print_moves();
+
+		return 0;
+	}
