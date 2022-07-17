@@ -89,13 +89,13 @@ int char_pieces[128];
 
 // Definition for moves
 
-#define encode_move(source, target, piece, promoted, capture, double, enpassant, castling) \
+#define encode_move(source, target, piece, promoted, capture, double_push, enpassant, castling) \
     (source) |          \
     (target << 6) |     \
     (piece << 12) |     \
     (promoted << 16) |  \
     (capture << 20) |   \
-    (double << 21) |    \
+    (double_push << 21) |    \
     (enpassant << 22) | \
     (castling << 23)    \
 
@@ -122,10 +122,6 @@ int char_pieces[128];
 
 // extract castling flag
 #define get_move_castling(move) (move & 0x800000)
-
-
-// TODO make this array or dynamic list if bottle neck
-vector<int> moves;
 
 
 // FEN dedug positions
@@ -889,16 +885,16 @@ static inline int make_move(int move, int move_flag) {
 		int promoted = get_move_promoted(move);
 		int capture = get_move_capture(move);
 		int double_push = get_move_double(move);
-		int enpassant = get_move_enpassant(move);
+		int enpass = get_move_enpassant(move);
 		int castling = get_move_castling(move);
 
 		pop_bit(bitboards[piece], source_square);
 		set_bit(bitboards[piece], target_square);
 
-		
+
 		//handle capture
 		if (capture) {
-			
+
 			// Maybe it is faster with a break condition
 			for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
 				pop_bit(bitboards[bb_piece], target_square);
@@ -912,7 +908,7 @@ static inline int make_move(int move, int move_flag) {
 		}
 
 		//handle enpassant
-		if (enpassant) {
+		if (enpass) {
 			(side == white) ? pop_bit(bitboards[p], target_square + 8) : pop_bit(bitboards[P], target_square - 8);
 		}
 
@@ -921,7 +917,7 @@ static inline int make_move(int move, int move_flag) {
 
 		//handle double push
 		if (double_push) {
-			(side == white) ? (enpassant = target_square + 8) : (enpassant = target_square - 8);
+			enpassant = ((side == white) ? (target_square + 8) : (target_square - 8));
 		}
 
 		//handle castle
@@ -988,7 +984,7 @@ static inline int make_move(int move, int move_flag) {
 }
 
 // TODO I could make this function longer but with fewer branches for efficency
-static inline void generate_moves() {
+static inline void generate_moves(vector<int>& moves) {
 	//init source-target
 	int source_square, target_square, piece;
 	//define bb copy
@@ -1096,8 +1092,9 @@ static inline void generate_moves() {
 				if (!is_square_attacked(e1, black) && !is_square_attacked(d1, black))
 					moves.push_back(encode_move(e1, c1, K, 0, 0, 0, 0, 1));
 			}
-		}	
-	} else {
+		}
+	}
+	else {
 		//Black pawns
 		bitboard = bitboards[p];
 		// loop over black pawns within black pawn bitboard
@@ -1209,36 +1206,36 @@ static inline void generate_moves() {
 	bitboard = bitboards[piece];
 
 	// loop over source squares of piece bitboard copy
-    while (bitboard)
-    {
-        // init source square
-        source_square = get_ls1b_index(bitboard);
-                
-        // init piece attacks in order to get set of target squares
-        attacks = knight_attacks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-                
-        // loop over target squares available from generated attacks
-        while (attacks)
-        {
-            // init target square
-            target_square = get_ls1b_index(attacks);    
-                    
-            // quite move
-            if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
-                moves.push_back(encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    
-            else
-                // capture move
-                moves.push_back(encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
-                    
-            // pop ls1b in current attacks set
-            pop_bit(attacks, target_square);
-        }
-                
-                
-        // pop ls1b of the current piece bitboard copy
-        pop_bit(bitboard, source_square);
-    }
+	while (bitboard)
+	{
+		// init source square
+		source_square = get_ls1b_index(bitboard);
+
+		// init piece attacks in order to get set of target squares
+		attacks = knight_attacks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+		// loop over target squares available from generated attacks
+		while (attacks)
+		{
+			// init target square
+			target_square = get_ls1b_index(attacks);
+
+			// quite move
+			if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
+				moves.push_back(encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+
+			else
+				// capture move
+				moves.push_back(encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+
+			// pop ls1b in current attacks set
+			pop_bit(attacks, target_square);
+		}
+
+
+		// pop ls1b of the current piece bitboard copy
+		pop_bit(bitboard, source_square);
+	}
 
 	//Bishop moves
 
@@ -1386,7 +1383,7 @@ static inline void generate_moves() {
 	}
 }
 
-void print_moves()
+void print_moves(vector<int> moves)
 {
 	cout << "move    piece     capture   double    enpass    castling" << endl;
 
@@ -1396,7 +1393,7 @@ void print_moves()
 		cout << (get_move_promoted(move) ? ascii_pieces[get_move_promoted(move)] : ' ') << "    ";
 		cout << ascii_pieces[get_move_piece(move)] << "          ";
 		cout << (get_move_capture(move) ? 1 : 0) << "         ";
-		cout << (get_move_double(move) ? 1 : 0) << "         " ;
+		cout << (get_move_double(move) ? 1 : 0) << "         ";
 		cout << (get_move_enpassant(move) ? 1 : 0) << "         ";
 		cout << (get_move_castling(move) ? 1 : 0);
 		cout << endl;
@@ -1406,43 +1403,197 @@ void print_moves()
 }
 
 
-	void init_char() {
-		char_pieces['P'] = P;
-		char_pieces['N'] = N;
-		char_pieces['B'] = B;
-		char_pieces['R'] = R;
-		char_pieces['Q'] = Q;
-		char_pieces['K'] = K;
-		char_pieces['p'] = p;
-		char_pieces['n'] = n;
-		char_pieces['b'] = b;
-		char_pieces['r'] = r;
-		char_pieces['q'] = q;
-		char_pieces['k'] = k;
+// leaf nodes (number of positions reached during the test of the move generator at a given depth)
+long nodes;
+
+// perft driver
+static inline void perft_driver(int depth)
+{
+	// reccursion escape condition
+	if (depth == 0)
+	{
+		// increment nodes count (count reached positions)
+		nodes++;
+		return;
 	}
 
-	void init_all() {
-		init_char();
-		init_leaper_attacks();
-		init_slider_attacks(bishop);
-		init_slider_attacks(rook);
-		//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
+	// generate moves
+	vector<int> moves;
+	generate_moves(moves);
+
+	// loop over generated moves
+	for (int i = 0; i < moves.size(); i++)
+	{
+		// preserve board state
+		copyboard();
+
+		// make move
+		if (!make_move(moves[i], all_moves))
+			// skip to the next move
+			continue;
+
+		// call perft driver recursively
+		perft_driver(depth - 1);
+
+		// take back
+		takeback();
+	}
+}
+
+// perft test
+void perft_test(int depth)
+{
+	printf("\n     Performance test\n\n");
+
+
+	// generate moves
+	vector<int> moves;
+	generate_moves(moves);
+
+
+	// loop over generated moves
+	for (int i = 0; i < moves.size(); i++)
+	{
+		// preserve board state
+		copyboard();
+
+		// make move
+		if (!make_move(moves[i], all_moves))
+			// skip to the next move
+			continue;
+
+		// cummulative nodes
+		long cummulative_nodes = nodes;
+
+		// call perft driver recursively
+		perft_driver(depth - 1);
+
+		// old nodes
+		long old_nodes = nodes - cummulative_nodes;
+
+		// take back
+		takeback();
+
+		// print move
+		printf("     move: %s%s%c  nodes: %ld\n", square_to_coordinates[get_move_source(moves[i])],
+			square_to_coordinates[get_move_target(moves[i])],
+			get_move_promoted(moves[i]) ? ascii_pieces[get_move_promoted(moves[i])] : ' ',
+			old_nodes);
 	}
 
-	int main() {
-		U64 bitboard = 0ULL;
-		//init
-		init_all();
-		parse_FEN("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPBqPPP/R3K2R w KQkq - 0 1 ");
-		print_board();
-		generate_moves();
-		
-		//print_moves(); those are pseudo moves
-		for (int move : moves) {
-			copyboard();
-			if (!make_move(move, all_moves)) continue;
-			print_board();
-			takeback();
+	// print results
+	printf("\n    Depth: %d\n", depth);
+	printf("    Nodes: %ld\n", nodes);
+}
+
+//USER INTERACTION
+
+// parse user/GUI move string input (e.g. "e7e8q")
+int parse_move(const char* move_string)
+{
+	// create move list instance
+	vector<int> moves;
+
+	// generate moves
+	generate_moves(moves);
+
+	// parse source square
+	int source_square = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
+
+	// parse target square
+	int target_square = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
+
+	// loop over the moves within a move list
+	for (int move_count = 0; move_count < moves.size(); move_count++)
+	{
+		// init move
+		int move = moves[move_count];
+
+		// make sure source & target squares are available within the generated move
+		if (source_square == get_move_source(move) && target_square == get_move_target(move))
+		{
+			// init promoted piece
+			int promoted_piece = get_move_promoted(move);
+
+			// promoted piece is available
+			if (promoted_piece)
+			{
+				// promoted to queen
+				if ((promoted_piece == Q || promoted_piece == q) && move_string[4] == 'q')
+					// return legal move
+					return move;
+
+				// promoted to rook
+				else if ((promoted_piece == R || promoted_piece == r) && move_string[4] == 'r')
+					// return legal move
+					return move;
+
+				// promoted to bishop
+				else if ((promoted_piece == B || promoted_piece == b) && move_string[4] == 'b')
+					// return legal move
+					return move;
+
+				// promoted to knight
+				else if ((promoted_piece == N || promoted_piece == n) && move_string[4] == 'n')
+					// return legal move
+					return move;
+
+				// continue the loop on possible wrong promotions (e.g. "e7e8f")
+				continue;
+			}
+
+			// return legal move
+			return move;
 		}
-		return 0;
 	}
+
+	// return illegal move
+	return 0;
+}
+
+
+void init_char() {
+	char_pieces['P'] = P;
+	char_pieces['N'] = N;
+	char_pieces['B'] = B;
+	char_pieces['R'] = R;
+	char_pieces['Q'] = Q;
+	char_pieces['K'] = K;
+	char_pieces['p'] = p;
+	char_pieces['n'] = n;
+	char_pieces['b'] = b;
+	char_pieces['r'] = r;
+	char_pieces['q'] = q;
+	char_pieces['k'] = k;
+}
+
+void init_all() {
+	init_char();
+	init_leaper_attacks();
+	init_slider_attacks(bishop);
+	init_slider_attacks(rook);
+	//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
+}
+
+int main() {
+	U64 bitboard = 0ULL;
+	//init
+	init_all();
+	parse_FEN(start_position);
+
+	print_board();
+	char input[8];
+	while (1) {
+		cin >> input;
+
+		if (input == "-1") break;
+		int move = parse_move(input);
+
+		if (move) {
+			make_move(move, all_moves);
+		}
+
+		print_board();
+	}
+	return 0;
+}
