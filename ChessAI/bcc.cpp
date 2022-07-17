@@ -8,23 +8,6 @@ using namespace std;
 
 #define U64 unsigned long long
 
-//DEFINITION BITBOARDS
-
-// piece bitboards
-U64 bitboards[12];
-
-// occupancy bitboards
-U64 occupancies[3];
-
-// side to move
-int side = white;
-
-// enpassant square
-int enpassant = no_sq;
-
-// castling rights
-int castle;
-
 // enums
 
 //to mask the flag of castling
@@ -35,6 +18,10 @@ enum {
 // encode pieces, upper for white
 enum { P, N, B, R, Q, K, p, n, b, r, q, k };
 
+// move types
+enum {
+	all_moves, only_capture
+};
 
 enum enumSquare {
 	a8, b8, c8, d8, e8, f8, g8, h8,
@@ -63,10 +50,25 @@ enum enumSlider {
 };
 
 enum enumColor {
-	white, black, both
+	white = 0, black = 1, both = 2
 };
 
+//DEFINITION BITBOARDS
 
+// piece bitboards
+U64 bitboards[12];
+
+// occupancy bitboards
+U64 occupancies[3];
+
+// side to move
+int side = white;
+
+// enpassant square
+int enpassant = no_sq;
+
+// castling rights
+int castle;
 
 // ASCII pieces (+1 for the terminator)
 char ascii_pieces[12 + 1] = "PNBRQKpnbrqk";
@@ -129,6 +131,20 @@ vector<int> moves;
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 w - - "
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+
+// Copy/Restore
+
+#define copyboard() \
+U64 bitboard_copy[12], occupancies_copy[3]; \
+int side_copy, enpassant_copy, castle_copy; \
+memcpy(bitboard_copy, bitboards, 96); \
+memcpy(occupancies_copy, occupancies, 24); \
+side_copy = side; enpassant_copy = enpassant; castle_copy = castle;
+
+#define takeback() \
+memcpy(bitboards, bitboard_copy, 96); \
+memcpy(occupancies, occupancies_copy, 24); \
+side = side_copy; enpassant = enpassant_copy; castle = castle_copy;
 
 
 //Convert the file in .c and use __builtin_popcountll(bitboard) if bottleneck
@@ -357,6 +373,18 @@ const int rook_relevant_bits[64]{
 	11, 10, 10, 10, 10, 10, 10, 11,
 	11, 10, 10, 10, 10, 10, 10, 11,
 	12, 11, 11, 11, 11, 11, 11, 12
+};
+
+// castling rights update constants
+const int castling_rights[64] = {
+	 7, 15, 15, 15,  3, 15, 15, 11,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 15, 15, 15, 15,
+	13, 15, 15, 15, 12, 15, 15, 14
 };
 
 //Those magic numbers are needed in order to filter the rook attack given the current occupancy of the board
@@ -846,6 +874,119 @@ void print_attacked_squares(int side)
 
 //IMPLEMENTATION OF ALL MOVES
 
+static inline int make_move(int move, int move_flag) {
+	//quite moves
+	if (move_flag == all_moves) {
+		//preserve state
+		copyboard();
+
+
+		int pawn = ((side == black) ? P : p);
+		//parse move
+		int source_square = get_move_source(move);
+		int target_square = get_move_target(move);
+		int piece = get_move_piece(move);
+		int promoted = get_move_promoted(move);
+		int capture = get_move_capture(move);
+		int double_push = get_move_double(move);
+		int enpassant = get_move_enpassant(move);
+		int castling = get_move_castling(move);
+
+		pop_bit(bitboards[piece], source_square);
+		set_bit(bitboards[piece], target_square);
+
+		
+		//handle capture
+		if (capture) {
+			
+			// Maybe it is faster with a break condition
+			for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
+				pop_bit(bitboards[bb_piece], target_square);
+			}
+		}
+
+		//handle promotions
+		if (promoted) {
+			pop_bit(bitboards[pawn], target_square);
+			set_bit(bitboards[promoted], target_square);
+		}
+
+		//handle enpassant
+		if (enpassant) {
+			(side == white) ? pop_bit(bitboards[p], target_square + 8) : pop_bit(bitboards[P], target_square - 8);
+		}
+
+		//Reset enpassant
+		enpassant = no_sq;
+
+		//handle double push
+		if (double_push) {
+			(side == white) ? (enpassant = target_square + 8) : (enpassant = target_square - 8);
+		}
+
+		//handle castle
+		if (castling) {
+			switch (target_square)
+			{
+				// white castles king side
+			case (g1):
+				// move H rook
+				pop_bit(bitboards[R], h1);
+				set_bit(bitboards[R], f1);
+				break;
+
+				// white castles queen side
+			case (c1):
+				// move A rook
+				pop_bit(bitboards[R], a1);
+				set_bit(bitboards[R], d1);
+				break;
+
+				// black castles king side
+			case (g8):
+				// move H rook
+				pop_bit(bitboards[r], h8);
+				set_bit(bitboards[r], f8);
+				break;
+
+				// black castles queen side
+			case (c8):
+				// move A rook
+				pop_bit(bitboards[r], a8);
+				set_bit(bitboards[r], d8);
+				break;
+			}
+		}
+
+		//update castle rights
+		castle &= castling_rights[source_square];
+		castle &= castling_rights[target_square]; //This prevents funny bug
+
+		//update occupancies //Maybe it is faster using pop_bit and set_bit everytime
+		occupancies[white] = bitboards[P] | bitboards[N] | bitboards[B] | bitboards[R] | bitboards[Q] | bitboards[K];
+		occupancies[black] = bitboards[p] | bitboards[n] | bitboards[b] | bitboards[r] | bitboards[q] | bitboards[k];
+		occupancies[both] = occupancies[white] | occupancies[black];
+
+		//change side
+		side ^= 1;
+
+		//Check if king is attacked
+		if (is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
+			//move is illegal
+			takeback();
+			return 0;
+		}
+		else {
+			return 1;
+		}
+	}
+	//capture
+	else {
+		if (get_move_capture(move)) make_move(move, all_moves);
+		else return 0;
+	}
+}
+
 // TODO I could make this function longer but with fewer branches for efficency
 static inline void generate_moves() {
 	//init source-target
@@ -1251,8 +1392,8 @@ void print_moves()
 
 	for (int move : moves) {
 		cout << square_to_coordinates[get_move_source(move)];
-		cout << square_to_coordinates[get_move_target(move)] << "   ";
-		cout << (get_move_promoted(move) ? ascii_pieces[get_move_promoted(move)] : ' ') << "  ";
+		cout << square_to_coordinates[get_move_target(move)] << " ";
+		cout << (get_move_promoted(move) ? ascii_pieces[get_move_promoted(move)] : ' ') << "    ";
 		cout << ascii_pieces[get_move_piece(move)] << "          ";
 		cout << (get_move_capture(move) ? 1 : 0) << "         ";
 		cout << (get_move_double(move) ? 1 : 0) << "         " ;
@@ -1260,6 +1401,8 @@ void print_moves()
 		cout << (get_move_castling(move) ? 1 : 0);
 		cout << endl;
 	}
+
+	cout << endl << "Total moves: " << moves.size() << endl;
 }
 
 
@@ -1290,9 +1433,16 @@ void print_moves()
 		U64 bitboard = 0ULL;
 		//init
 		init_all();
-		parse_FEN(start_position);
+		parse_FEN("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPBqPPP/R3K2R w KQkq - 0 1 ");
+		print_board();
 		generate_moves();
-		print_moves();
-
+		
+		//print_moves(); those are pseudo moves
+		for (int move : moves) {
+			copyboard();
+			if (!make_move(move, all_moves)) continue;
+			print_board();
+			takeback();
+		}
 		return 0;
 	}
