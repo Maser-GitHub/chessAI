@@ -1559,6 +1559,12 @@ void print_moves(vector<int> moves)
 	cout << endl << "Total moves: " << moves.size() << endl;
 }
 
+void print_move(int move) {
+	cout << square_to_coordinates[get_move_source(move)];
+	cout << square_to_coordinates[get_move_target(move)] << " ";
+	cout << endl;
+}
+
 
 // leaf nodes (number of positions reached during the test of the move generator at a given depth)
 long nodes;
@@ -1642,6 +1648,121 @@ void perft_test(int depth)
 	printf("\n    Depth: %d\n", depth);
 	printf("    Nodes: %ld\n", nodes);
 }
+
+// SEARCH
+
+//half moves
+int ply;
+//best move
+int best_move;
+
+static inline int quiescence(int alpha, int beta) {
+
+	//evaluation
+	int eval = evaluate();
+
+	if (eval >= beta) return beta;
+
+	//found better move (PV node move)
+	if (eval > alpha) {
+		alpha = eval;
+	}
+	//create moves:
+	vector<int> moves;
+
+	generate_moves(moves);
+
+	for (int i = 0; i < moves.size(); i++) {
+		//preserve boards
+		copyboard();
+		ply++;
+		//legal moves
+		if (make_move(moves[i], only_capture) == 0) {
+			ply--;
+			continue;
+		}
+
+		//score move
+		int score = -quiescence(-beta, -alpha);
+
+		//if it was legal
+		ply--;
+		takeback();
+
+		//fail-hard cutoff (fail high)
+	}
+}
+
+static inline int negamax(int alpha, int beta, int depth) {
+	if (depth == 0) return quiescence(alpha,beta);
+
+	//increments nodes
+	nodes++;
+
+	bool in_check = is_square_attacked((side == white) ? (get_ls1b_index(bitboards[K])) : (get_ls1b_index(bitboards[k])), side^1);
+	int legal_moves = 0;
+	int best_sofar = 0;
+	int old_alpha = alpha;
+	//create moves:
+	vector<int> moves;
+
+	generate_moves(moves);
+
+	for (int i = 0; i < moves.size(); i++) {
+		//preserve boards
+		copyboard();
+		ply++;
+		//legal moves
+		if (make_move(moves[i], all_moves) == 0) {
+			ply--;
+			continue;
+		}
+
+		legal_moves++;
+		//score move
+		int score = -negamax(-beta, -alpha, depth - 1);
+
+		//if it was legal
+		ply--;
+		takeback();
+		
+		//fail-hard cutoff (fail high)
+		if (score >= beta) return beta;
+
+		//found better move (PV node move)
+		if (score > alpha) {
+			alpha = score;
+			if (ply == 0) {
+				best_sofar = moves[i];
+			}
+		}
+	}
+	if (legal_moves == 0) {
+		//king in check //+ply to find "closest mate"
+		if (in_check) return -49000 + ply;
+		return 0;
+
+	}
+
+	if (old_alpha != alpha) {
+		best_move = best_sofar;
+	}
+
+	//nodes fails low
+	return alpha;
+
+}
+
+
+void search_position(int depth) {
+
+	int score = negamax(-50000, 50000, depth);
+
+	//return best move
+	cout << "Best move: ";
+	print_move(best_move);
+}
+
 
 //USER INTERACTION
 
@@ -1748,10 +1869,17 @@ int main() {
 	U64 bitboard = 0ULL;
 	//init
 	init_all();
-	parse_FEN("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1 ");
-
+	parse_FEN(start_position);
 	print_board();
 
-	cout << "Score: " << evaluate() << endl;
+	while (1) {
+		negamax(-50000, 50000, 3);
+		print_move(best_move);
+		make_move(best_move, all_moves);
+		print_board();
+		getchar();
+	}
+
+
 	return 0;
 }
