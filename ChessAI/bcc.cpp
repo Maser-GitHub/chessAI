@@ -678,6 +678,23 @@ U64 bishop_magic_numbers[64] = {
 	0x4010011029020020ULL
 };
 
+// MVV LVA [attacker][victim]
+static int mvv_lva[12][12] = {
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600,
+
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
+};
+
 
 //Pawn attacks table [side][square]
 
@@ -1656,8 +1673,40 @@ int ply;
 //best move
 int best_move;
 
+static inline int score_move(int move) {
+	//if capture
+	if (get_move_capture(move)) {
+		int target_piece;
+		int pawn = (side == white) ? (p) : (P);
+		int target_square = get_move_target(move);
+		for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
+			if (get_bit(bitboards[bb_piece], target_square)) {
+				target_piece == bb_piece;
+			}
+		}
+		//score MVV LVA
+		return mvv_lva[get_move_piece(move)][target_piece];
+	}
+	//quiet move
+	return 0;
+}
+
+// TODO if needed actually implement
+static inline int sort_moves(vector<int>& moves) {
+	vector<int> move_score;
+
+	for (int i = 0; i < moves.size(); i++) {
+		move_score.push_back(score_move(moves[i]));
+	}
+
+	for (int i = 0; i < moves.size(); i++) {
+		return 0;
+	}
+}
+
 static inline int quiescence(int alpha, int beta) {
 
+	nodes++;
 	//evaluation
 	int eval = evaluate();
 
@@ -1690,16 +1739,19 @@ static inline int quiescence(int alpha, int beta) {
 		takeback();
 
 		//fail-hard cutoff (fail high)
+		if (score >= beta) return beta;
+		if (score > alpha) alpha = score;
 	}
+	return alpha;
 }
 
 static inline int negamax(int alpha, int beta, int depth) {
-	if (depth == 0) return quiescence(alpha,beta);
+	if (depth == 0) return quiescence(alpha, beta);
 
 	//increments nodes
 	nodes++;
 
-	bool in_check = is_square_attacked((side == white) ? (get_ls1b_index(bitboards[K])) : (get_ls1b_index(bitboards[k])), side^1);
+	bool in_check = is_square_attacked((side == white) ? (get_ls1b_index(bitboards[K])) : (get_ls1b_index(bitboards[k])), side ^ 1);
 	int legal_moves = 0;
 	int best_sofar = 0;
 	int old_alpha = alpha;
@@ -1725,7 +1777,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 		//if it was legal
 		ply--;
 		takeback();
-		
+
 		//fail-hard cutoff (fail high)
 		if (score >= beta) return beta;
 
@@ -1873,8 +1925,8 @@ int main() {
 	print_board();
 
 	while (1) {
-		negamax(-50000, 50000, 3);
-		print_move(best_move);
+
+		negamax(-50000, 50000, 1);
 		make_move(best_move, all_moves);
 		print_board();
 		getchar();
