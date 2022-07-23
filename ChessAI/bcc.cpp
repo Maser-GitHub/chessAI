@@ -127,6 +127,7 @@ int char_pieces[128];
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 w - - "
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 
 // Copy/Restore
 
@@ -1579,7 +1580,6 @@ void print_moves(vector<int> moves)
 void print_move(int move) {
 	cout << square_to_coordinates[get_move_source(move)];
 	cout << square_to_coordinates[get_move_target(move)] << " ";
-	cout << endl;
 }
 
 
@@ -1679,20 +1679,22 @@ static inline int score_move(int move) {
 		int target_piece;
 		int pawn = (side == white) ? (p) : (P);
 		int target_square = get_move_target(move);
+		//TODO for for half pieces
 		for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
 			if (get_bit(bitboards[bb_piece], target_square)) {
-				target_piece == bb_piece;
+				target_piece = bb_piece;
+				return mvv_lva[get_move_piece(move)][target_piece];
 			}
 		}
 		//score MVV LVA
-		return mvv_lva[get_move_piece(move)][target_piece];
+		//return mvv_lva[get_move_piece(move)][target_piece];
 	}
 	//quiet move
 	return 0;
 }
 
-// TODO if needed actually implement
-static inline int sort_moves(vector<int>& moves) {
+// TODO improve
+static inline void sort_moves(vector<int>& moves) {
 	vector<int> move_score;
 
 	for (int i = 0; i < moves.size(); i++) {
@@ -1700,7 +1702,16 @@ static inline int sort_moves(vector<int>& moves) {
 	}
 
 	for (int i = 0; i < moves.size(); i++) {
-		return 0;
+		for (int j = i + 1; j < moves.size(); j++) {
+			if (move_score[i] < move_score[j]) {
+				move_score[i] ^= move_score[j];
+				move_score[j] ^= move_score[i];
+				move_score[i] ^= move_score[j];
+				moves[i] ^= moves[j];
+				moves[j] ^= moves[i];
+				moves[i] ^= moves[j];
+			}
+		}
 	}
 }
 
@@ -1720,6 +1731,8 @@ static inline int quiescence(int alpha, int beta) {
 	vector<int> moves;
 
 	generate_moves(moves);
+
+	sort_moves(moves);
 
 	for (int i = 0; i < moves.size(); i++) {
 		//preserve boards
@@ -1752,6 +1765,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 	nodes++;
 
 	bool in_check = is_square_attacked((side == white) ? (get_ls1b_index(bitboards[K])) : (get_ls1b_index(bitboards[k])), side ^ 1);
+	if (in_check) depth++;
 	int legal_moves = 0;
 	int best_sofar = 0;
 	int old_alpha = alpha;
@@ -1759,6 +1773,8 @@ static inline int negamax(int alpha, int beta, int depth) {
 	vector<int> moves;
 
 	generate_moves(moves);
+
+	sort_moves(moves);
 
 	for (int i = 0; i < moves.size(); i++) {
 		//preserve boards
@@ -1921,17 +1937,11 @@ int main() {
 	U64 bitboard = 0ULL;
 	//init
 	init_all();
-	parse_FEN(start_position);
+	parse_FEN(tricky_position);
 	print_board();
-
-	while (1) {
-
-		negamax(-50000, 50000, 1);
-		make_move(best_move, all_moves);
-		print_board();
-		getchar();
-	}
-
+	
+	search_position(5);
+	cout << nodes << endl;
 
 	return 0;
 }
