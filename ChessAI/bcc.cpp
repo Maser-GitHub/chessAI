@@ -123,6 +123,7 @@ int char_pieces[128];
 // extract castling flag
 #define get_move_castling(move) (move & 0x800000)
 
+#define PLY 64
 
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 w - - "
@@ -696,6 +697,12 @@ static int mvv_lva[12][12] = {
 	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
 };
 
+// killer moves [id][ply]
+int killer_moves[2][PLY];
+
+// history moves [piece][square]
+int history_moves[12][64];
+
 
 //Pawn attacks table [side][square]
 
@@ -1156,6 +1163,8 @@ static inline int make_move(int move, int move_flag) {
 		if (get_move_capture(move)) make_move(move, all_moves);
 		else return 0;
 	}
+
+	return 0;
 }
 
 // TODO I could make this function longer but with fewer branches for efficency
@@ -1196,7 +1205,7 @@ static inline void generate_moves(vector<int>& moves) {
 
 					// two squares ahead pawn move
 					if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancies[both], target_square - 8))
-						moves.push_back(encode_move(source_square, target_square - 8, P, 0, 0, 1, 0, 0));
+						moves.push_back((encode_move(source_square, target_square - 8, P, 0, 0, 1, 0, 0)));
 				}
 			}
 			// init pawn attacks bitboard
@@ -1300,7 +1309,7 @@ static inline void generate_moves(vector<int>& moves) {
 
 					// two squares ahead pawn move
 					if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancies[both], target_square + 8))
-						moves.push_back(encode_move(source_square, target_square + 8, p, 0, 0, 1, 0, 0));
+						moves.push_back((encode_move(source_square, target_square + 8, p, 0, 0, 1, 0, 0)));
 				}
 			}
 
@@ -1668,29 +1677,65 @@ void perft_test(int depth)
 
 // SEARCH
 
+int pv_lenght[PLY];
+int pv_table[PLY][PLY];
+
+// flags
+bool follow_pv, score_pv;
+
 //half moves
 int ply;
-//best move
-int best_move;
+
+static inline void enable_pv_scoring(vector<int>& moves) {
+	follow_pv = 0;
+
+	for (int i = 0; i < moves.size(); i++) {
+		if (pv_table[0][ply] == moves[i]) {
+			score_pv = true;
+			follow_pv = true;
+		}
+	}
+}
 
 static inline int score_move(int move) {
+	//pv score allowed
+	if (score_pv) {
+		if (pv_table[0][ply] == move) {
+			score_pv = false;
+			return 20000;
+		}
+	}
+
+
 	//if capture
 	if (get_move_capture(move)) {
 		int target_piece;
 		int pawn = (side == white) ? (p) : (P);
 		int target_square = get_move_target(move);
 		//TODO for for half pieces
-		for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
+		for (int bb_piece = P; bb_piece <= k; bb_piece++) {
 			if (get_bit(bitboards[bb_piece], target_square)) {
 				target_piece = bb_piece;
-				return mvv_lva[get_move_piece(move)][target_piece];
+				return mvv_lva[get_move_piece(move)][target_piece] + 10000;
 			}
 		}
 		//score MVV LVA
 		//return mvv_lva[get_move_piece(move)][target_piece];
 	}
 	//quiet move
-	return 0;
+	//score 1st killer
+	if (killer_moves[0][ply] == move) return 9000;
+	//score 2nd killer
+	if (killer_moves[1][ply] == move) return 8000;
+	//score history
+	return history_moves[get_move_piece(move)][get_move_target(move)];
+}
+
+void print_moves_score(vector<int> moves) {
+	for (int i = 0; i < moves.size(); i++) {
+		print_move(moves[i]);
+		cout << ":" << score_move(moves[i]) << endl;
+	}
 }
 
 // TODO improve
@@ -1759,20 +1804,25 @@ static inline int quiescence(int alpha, int beta) {
 }
 
 static inline int negamax(int alpha, int beta, int depth) {
+	pv_lenght[ply] = ply;
+
 	if (depth == 0) return quiescence(alpha, beta);
 
+	//We are overflowing the arrays
+	if (ply > PLY - 1) return evaluate();
 	//increments nodes
 	nodes++;
 
 	bool in_check = is_square_attacked((side == white) ? (get_ls1b_index(bitboards[K])) : (get_ls1b_index(bitboards[k])), side ^ 1);
 	if (in_check) depth++;
 	int legal_moves = 0;
-	int best_sofar = 0;
-	int old_alpha = alpha;
 	//create moves:
 	vector<int> moves;
 
 	generate_moves(moves);
+
+	if (follow_pv) enable_pv_scoring(moves);
+
 
 	sort_moves(moves);
 
@@ -1795,14 +1845,25 @@ static inline int negamax(int alpha, int beta, int depth) {
 		takeback();
 
 		//fail-hard cutoff (fail high)
-		if (score >= beta) return beta;
+		if (score >= beta) {
+			if (get_move_capture(moves[i]) == 0) {
+				killer_moves[1][ply] = killer_moves[0][ply];
+				killer_moves[0][ply] = moves[i];
+			}
+			return beta;
+		}
 
 		//found better move (PV node move)
 		if (score > alpha) {
-			alpha = score;
-			if (ply == 0) {
-				best_sofar = moves[i];
+			if (get_move_capture(moves[i]) == 0) {
+				history_moves[get_move_piece(moves[i])][get_move_target(moves[i])] += depth;
 			}
+			alpha = score;
+			pv_table[ply][ply] = moves[i];
+			for (int j = ply + 1; j < pv_lenght[ply + 1]; j++) {
+				pv_table[ply][j] = pv_table[ply + 1][j];
+			}
+			pv_lenght[ply] = pv_lenght[ply + 1];
 		}
 	}
 	if (legal_moves == 0) {
@@ -1811,11 +1872,6 @@ static inline int negamax(int alpha, int beta, int depth) {
 		return 0;
 
 	}
-
-	if (old_alpha != alpha) {
-		best_move = best_sofar;
-	}
-
 	//nodes fails low
 	return alpha;
 
@@ -1824,11 +1880,27 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 void search_position(int depth) {
 
-	int score = negamax(-50000, 50000, depth);
+	nodes = 0;
+	follow_pv = false;
+	score_pv = false;
 
-	//return best move
-	cout << "Best move: ";
-	print_move(best_move);
+	memset(killer_moves, 0, sizeof(killer_moves));
+	memset(history_moves, 0, sizeof(history_moves));
+	memset(pv_table, 0, sizeof(pv_table));
+	memset(pv_lenght, 0, sizeof(pv_lenght));
+	for (int d = 1; d <= depth; d++) {
+		follow_pv = true;
+
+
+		int score = negamax(-50000, 50000, d);
+
+		//return best move
+		cout << "Best moves: ";
+		for (int i = 0; i < pv_lenght[0]; i++) {
+			print_move(pv_table[0][i]);
+		}
+		cout << endl;
+	}
 }
 
 
@@ -1937,11 +2009,11 @@ int main() {
 	U64 bitboard = 0ULL;
 	//init
 	init_all();
-	parse_FEN(tricky_position);
+	parse_FEN(start_position);
 	print_board();
-	
-	search_position(5);
-	cout << nodes << endl;
+	search_position(7);
 
+
+	cout << nodes << endl;
 	return 0;
 }
