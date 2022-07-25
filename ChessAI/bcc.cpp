@@ -90,14 +90,14 @@ int char_pieces[128];
 // Definition for moves
 
 #define encode_move(source, target, piece, promoted, capture, double_push, enpassant, castling) \
-    (source) |          \
-    (target << 6) |     \
-    (piece << 12) |     \
-    (promoted << 16) |  \
-    (capture << 20) |   \
-    (double_push << 21) |    \
-    (enpassant << 22) | \
-    (castling << 23)    \
+    (source) |           \
+    (target << 6) |      \
+    (piece << 12) |      \
+    (promoted << 16) |   \
+    (capture << 20) |    \
+    (double_push << 21) |\
+    (enpassant << 22) |  \
+    (castling << 23)     \
 
 // extract source square
 #define get_move_source(move) (move & 0x3f)
@@ -1205,7 +1205,7 @@ static inline void generate_moves(vector<int>& moves) {
 
 					// two squares ahead pawn move
 					if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancies[both], target_square - 8))
-						moves.push_back((encode_move(source_square, target_square - 8, P, 0, 0, 1, 0, 0)));
+						moves.push_back(encode_move(source_square, target_square - 8, P, 0, 0, 1, 0, 0));
 				}
 			}
 			// init pawn attacks bitboard
@@ -1309,7 +1309,7 @@ static inline void generate_moves(vector<int>& moves) {
 
 					// two squares ahead pawn move
 					if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancies[both], target_square + 8))
-						moves.push_back((encode_move(source_square, target_square + 8, p, 0, 0, 1, 0, 0)));
+						moves.push_back(encode_move(source_square, target_square + 8, p, 0, 0, 1, 0, 0));
 				}
 			}
 
@@ -1686,8 +1686,8 @@ bool follow_pv, score_pv;
 //half moves
 int ply;
 
-static inline void enable_pv_scoring(vector<int>& moves) {
-	follow_pv = 0;
+static inline void enable_pv_scoring(vector<int> moves) {
+	follow_pv = false;
 
 	for (int i = 0; i < moves.size(); i++) {
 		if (pv_table[0][ply] == moves[i]) {
@@ -1805,6 +1805,7 @@ static inline int quiescence(int alpha, int beta) {
 
 static inline int negamax(int alpha, int beta, int depth) {
 	pv_lenght[ply] = ply;
+	bool found_pv = false;
 
 	if (depth == 0) return quiescence(alpha, beta);
 
@@ -1821,8 +1822,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 	generate_moves(moves);
 
-	if (follow_pv) enable_pv_scoring(moves);
-
+	//if (follow_pv) enable_pv_scoring(moves);
 
 	sort_moves(moves);
 
@@ -1838,7 +1838,16 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 		legal_moves++;
 		//score move
-		int score = -negamax(-beta, -alpha, depth - 1);
+		int score;
+		if (found_pv)
+		{
+			score = -negamax(-alpha - 1, -alpha, depth - 1);
+			if ((score > alpha) && (score < beta)) // Check for failure.
+				score = -negamax(-beta, -alpha, depth - 1);
+		}
+		else {
+			score = -negamax(-beta, -alpha, depth - 1);
+		}
 
 		//if it was legal
 		ply--;
@@ -1859,6 +1868,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 				history_moves[get_move_piece(moves[i])][get_move_target(moves[i])] += depth;
 			}
 			alpha = score;
+			found_pv = true;
 			pv_table[ply][ply] = moves[i];
 			for (int j = ply + 1; j < pv_lenght[ply + 1]; j++) {
 				pv_table[ply][j] = pv_table[ply + 1][j];
@@ -1880,6 +1890,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 void search_position(int depth) {
 
+	int score = 0;
 	nodes = 0;
 	follow_pv = false;
 	score_pv = false;
@@ -1888,11 +1899,11 @@ void search_position(int depth) {
 	memset(history_moves, 0, sizeof(history_moves));
 	memset(pv_table, 0, sizeof(pv_table));
 	memset(pv_lenght, 0, sizeof(pv_lenght));
+
 	for (int d = 1; d <= depth; d++) {
 		follow_pv = true;
 
-
-		int score = negamax(-50000, 50000, d);
+		score = negamax(-50000, 50000, d);
 
 		//return best move
 		cout << "Best moves: ";
@@ -2011,7 +2022,7 @@ int main() {
 	init_all();
 	parse_FEN(start_position);
 	print_board();
-	search_position(7);
+	search_position(6);
 
 
 	cout << nodes << endl;
