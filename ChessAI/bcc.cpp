@@ -3,6 +3,7 @@
 // TODO remove global variables
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 
 using namespace std;
 
@@ -1817,6 +1818,15 @@ bool follow_pv, score_pv;
 //half moves
 int ply;
 
+// transposition table hash flags
+enum {hash_flag_exact, hash_flag_alpha, hash_flag_beta};
+
+
+//int the int the 5lsb indicate the depth, the 6th and 7th are the flags and the rest indicates the score
+unordered_map<U64, int> hash_table;
+
+
+
 static inline void enable_pv_scoring(vector<int>& moves) {
 	follow_pv = false;
 
@@ -2231,6 +2241,7 @@ void init_all() {
 	init_slider_attacks(rook);
 	init_score();
 	init_random_keys();
+	hash_table.clear();
 	//init_bitboards(); LATER Add this for performance when you will need to implement multiple boards
 }
 
@@ -2239,10 +2250,8 @@ int main() {
 	//init
 	init_all();
 	parse_FEN(start_position);
-
-	perft_test(6);
-
 	print_board();
+
 	/*while (1) {
 		search_position(6);
 		make_move(pv_table[0][0], all_moves);
