@@ -1867,21 +1867,19 @@ static inline int score_move(int move) {
 		}
 	}
 
-
 	//if capture
 	if (get_move_capture(move)) {
-		int target_piece;
 		int pawn = (side == white) ? (p) : (P);
+		int target_piece = pawn; //if the loop doesn't find a piece is because of enpassant, so the target is enemy pawn
 		int target_square = get_move_target(move);
 		//TODO for for half pieces
-		for (int bb_piece = P; bb_piece <= k; bb_piece++) {
+		for (int bb_piece = pawn; bb_piece < pawn + 6; bb_piece++) {
 			if (get_bit(bitboards[bb_piece], target_square)) {
 				target_piece = bb_piece;
-				return mvv_lva[get_move_piece(move)][target_piece] + 10000;
 			}
 		}
 		//score MVV LVA
-		//return mvv_lva[get_move_piece(move)][target_piece];
+		return mvv_lva[get_move_piece(move)][target_piece] + 10000;
 	}
 	//quiet move
 	//score 1st killer
@@ -2000,18 +1998,18 @@ static inline int negamax(int alpha, int beta, int depth) {
 	if (depth >= 3 && in_check == 0 && ply) {
 		copyboard();
 		ply++;
-		
+
 		if (enpassant != no_sq) hash_key ^= enpassant_keys[enpassant];
 
 		//reset enpassant
 		enpassant = no_sq;
-		
+
 		//extra move to opponenet
 		side ^= 1;
 
 		hash_key ^= side_key;
 		score = -negamax(-beta, -beta + 1, depth - 1 - 2);
-		
+
 		ply--;
 		takeback();
 
@@ -2142,6 +2140,7 @@ void search_position(int depth) {
 		follow_pv = true;
 
 		score = negamax(alpha, beta, d);
+
 
 		if ((score <= alpha) || (score >= beta)) {
 			alpha = -INF;
@@ -2305,7 +2304,7 @@ int main() {
 		make_move(pv_table[0][0], all_moves);
 		print_board();
 	}*/
-	search_position(8);
+	search_position(7);
 	cout << dec << nodes << endl;
 	return 0;
 }
