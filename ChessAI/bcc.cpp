@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <tuple>
 
 using namespace std;
 
@@ -1182,7 +1183,7 @@ static inline int make_move(int move, int move_flag) {
 				}
 			}
 
-			
+
 		}
 
 		//handle promotions
@@ -1819,12 +1820,31 @@ bool follow_pv, score_pv;
 int ply;
 
 // transposition table hash flags
-enum {hash_flag_exact, hash_flag_alpha, hash_flag_beta};
+enum { hash_flag_exact, hash_flag_alpha, hash_flag_beta };
 
 
-//int the int the 5lsb indicate the depth, the 6th and 7th are the flags and the rest indicates the score
-unordered_map<U64, int> hash_table;
+//In the tuple the U64 is the hash_key, the int are: depth, flag, score
+//get<0> returns hash_key, get<1> depth, get<2> flag, get<3> score
+unordered_map<U64, tuple<U64, int, int, int>> hash_table;
 
+
+static inline int read_hash_entry(int alpha, int beta, int depth) {
+	//treats the std::unordered_map as a hash map
+	tuple<U64, int, int, int> hash_entry = hash_table[hash_key % hash_table.max_size()];
+	int hash_flag = get<2>(hash_entry);
+	int hash_score = get<3>(hash_entry);
+	if (get<0>(hash_entry) == hash_key) {
+		if (get<1>(hash_entry) >= depth) {
+			if (hash_flag == hash_flag_exact) return hash_score;
+			if ((hash_flag == hash_flag_alpha) && (hash_score <= alpha)) return alpha;
+			if ((hash_flag == hash_flag_beta) && (hash_score >= beta)) return beta;
+		}
+	}
+	return INF + 1; //no hash entry
+}
+
+// int depth, int hash_flag, int score
+#define write_hash_entry(depth,hash_flag,score) (hash_table[hash_key % hash_table.max_size()] = make_tuple(hash_key, depth, hash_flag, score))
 
 
 static inline void enable_pv_scoring(vector<int>& moves) {
@@ -1904,13 +1924,16 @@ static inline void sort_moves(vector<int>& moves) {
 static inline int quiescence(int alpha, int beta) {
 
 	nodes++;
+
+	//We are overflowing the arrays
+	if (ply >= PLY - 2) return evaluate();
+
 	//evaluation
 	int eval = evaluate();
 
-	if (eval >= beta) return beta;
-
 	//found better move (PV node move)
 	if (eval > alpha) {
+		if (eval >= beta) return beta;
 		alpha = eval;
 	}
 	//create moves:
@@ -1938,8 +1961,10 @@ static inline int quiescence(int alpha, int beta) {
 		takeback();
 
 		//fail-hard cutoff (fail high)
-		if (score >= beta) return beta;
-		if (score > alpha) alpha = score;
+		if (score > alpha) {
+			alpha = score;
+			if (score >= beta) return beta;
+		}
 	}
 	return alpha;
 }
@@ -1948,9 +1973,17 @@ const int full_depth_moves = 4;
 const int reduction_limit = 3;
 
 static inline int negamax(int alpha, int beta, int depth) {
+
+	int score;
+
+	int hash_flag = hash_flag_alpha;
+
+	//read hash entry
+	if (ply && (score = read_hash_entry(alpha, beta, depth)) <= INF) {
+		return score;
+	}
+
 	pv_length[ply] = ply;
-
-
 
 	if (depth == 0) return quiescence(alpha, beta);
 
@@ -1966,11 +1999,20 @@ static inline int negamax(int alpha, int beta, int depth) {
 	//null move pruning
 	if (depth >= 3 && in_check == 0 && ply) {
 		copyboard();
-		//extra move to opponenet
-		side ^= 1;
+		ply++;
+		
+		if (enpassant != no_sq) hash_key ^= enpassant_keys[enpassant];
+
 		//reset enpassant
 		enpassant = no_sq;
-		int score = -negamax(-beta, -beta + 1, depth - 1 - 2);
+		
+		//extra move to opponenet
+		side ^= 1;
+
+		hash_key ^= side_key;
+		score = -negamax(-beta, -beta + 1, depth - 1 - 2);
+		
+		ply--;
 		takeback();
 
 		if (score >= beta) return beta;
@@ -2000,7 +2042,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 		legal_moves++;
 		//score move
 
-		int score;
+		score;
 
 		// full depth search
 		if (moves_searched == 0) {
@@ -2039,17 +2081,10 @@ static inline int negamax(int alpha, int beta, int depth) {
 		takeback();
 		moves_searched++;
 
-		//fail-hard cutoff (fail high)
-		if (score >= beta) {
-			if (get_move_capture(moves[i]) == 0) {
-				killer_moves[1][ply] = killer_moves[0][ply];
-				killer_moves[0][ply] = moves[i];
-			}
-			return beta;
-		}
-
 		//found better move (PV node move)
 		if (score > alpha) {
+			hash_flag = hash_flag_exact;
+
 			if (get_move_capture(moves[i]) == 0) {
 				history_moves[get_move_piece(moves[i])][get_move_target(moves[i])] += depth;
 			}
@@ -2060,17 +2095,30 @@ static inline int negamax(int alpha, int beta, int depth) {
 				pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
 			//adjust pv length
 			pv_length[ply] = pv_length[ply + 1];
+
+			//fail-hard cutoff (fail high)
+			if (score >= beta) {
+				//store hash entry
+				write_hash_entry(depth, hash_flag_beta, score);
+
+				if (get_move_capture(moves[i]) == 0) {
+					killer_moves[1][ply] = killer_moves[0][ply];
+					killer_moves[0][ply] = moves[i];
+				}
+				return beta;
+			}
 		}
 	}
 	if (legal_moves == 0) {
 		//king in check //+ply to find "closest mate"
-		if (in_check) return -49000 + ply;
+		if (in_check) return -INF + 1 + ply;
 		return 0;
 
 	}
+	//store hash with fail low
+	write_hash_entry(depth, hash_flag, alpha);
 	//nodes fails low
 	return alpha;
-
 }
 
 
@@ -2090,6 +2138,7 @@ void search_position(int depth) {
 	int beta = INF;
 
 	for (int d = 1; d <= depth; d++) {
+		nodes = 0;
 		follow_pv = true;
 
 		score = negamax(alpha, beta, d);
@@ -2251,14 +2300,12 @@ int main() {
 	init_all();
 	parse_FEN(start_position);
 	print_board();
-
 	/*while (1) {
 		search_position(6);
 		make_move(pv_table[0][0], all_moves);
 		print_board();
-		getchar();
 	}*/
-	//search_position(7);
-	//cout << dec << nodes << endl;
+	search_position(8);
+	cout << dec << nodes << endl;
 	return 0;
 }
