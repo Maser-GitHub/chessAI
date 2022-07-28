@@ -75,6 +75,16 @@ int castle;
 //hash unique identifier
 U64 hash_key;
 
+//max ply in entire game TODO make better
+U64 repetition_table[1000];
+
+int repetition_index = 0;
+
+//half moves
+int ply;
+
+
+
 // ASCII pieces (+1 for the terminator)
 char ascii_pieces[12 + 1] = "PNBRQKpnbrqk";
 
@@ -135,7 +145,10 @@ int char_pieces[128];
 #define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
 #define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 
-#define INF 99999
+//Change this toghether
+#define INF 50000
+#define MATE 49000
+#define MATE_SCORE 48000
 
 // Copy/Restore
 
@@ -444,6 +457,14 @@ void parse_FEN(const char* fen) {
 	side = white;
 	enpassant = no_sq;
 	castle = 0;
+
+	hash_key = 0ULL;
+
+	repetition_index = 0;
+
+	memset(repetition_table, 0ULL, sizeof(repetition_table));
+
+	ply = 0;
 
 	for (int rank = 0; rank < 8; rank++) {
 		for (int file = 0; file < 8; file++) {
@@ -1816,9 +1837,6 @@ int pv_table[PLY][PLY];
 // flags
 bool follow_pv, score_pv;
 
-//half moves
-int ply;
-
 // transposition table hash flags
 enum { hash_flag_exact, hash_flag_alpha, hash_flag_beta };
 
@@ -1835,6 +1853,10 @@ static inline int read_hash_entry(int alpha, int beta, int depth) {
 	int hash_score = get<3>(hash_entry);
 	if (get<0>(hash_entry) == hash_key) {
 		if (get<1>(hash_entry) >= depth) {
+			
+			if (hash_score < -MATE_SCORE) hash_score += ply;
+			if (hash_score > MATE_SCORE) hash_score -= ply;
+
 			if (hash_flag == hash_flag_exact) return hash_score;
 			if ((hash_flag == hash_flag_alpha) && (hash_score <= alpha)) return alpha;
 			if ((hash_flag == hash_flag_beta) && (hash_score >= beta)) return beta;
@@ -1844,7 +1866,11 @@ static inline int read_hash_entry(int alpha, int beta, int depth) {
 }
 
 // int depth, int hash_flag, int score
-#define write_hash_entry(depth,hash_flag,score) (hash_table[hash_key % hash_table.max_size()] = make_tuple(hash_key, depth, hash_flag, score))
+static inline void write_hash_entry(int depth, int hash_flag, int score) {
+	if (score < -MATE_SCORE) score -= ply;
+	if (score > MATE_SCORE) score += ply;
+	hash_table[hash_key % hash_table.max_size()] = make_tuple(hash_key, depth, hash_flag, score);
+}
 
 
 static inline void enable_pv_scoring(vector<int>& moves) {
@@ -1919,6 +1945,17 @@ static inline void sort_moves(vector<int>& moves) {
 	}
 }
 
+//repetition detection
+static inline bool is_repetition() {
+	for (int i = 0; i < repetition_index; i++) {
+		if (hash_key == repetition_table[i]) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static inline int quiescence(int alpha, int beta) {
 
 	nodes++;
@@ -1945,9 +1982,16 @@ static inline int quiescence(int alpha, int beta) {
 		//preserve boards
 		copyboard();
 		ply++;
+
+		repetition_index++;
+		repetition_table[repetition_index] = hash_key;
+
+
 		//legal moves
 		if (make_move(moves[i], only_capture) == 0) {
 			ply--;
+
+			repetition_index--;
 			continue;
 		}
 
@@ -1956,6 +2000,7 @@ static inline int quiescence(int alpha, int beta) {
 
 		//if it was legal
 		ply--;
+		repetition_index--;
 		takeback();
 
 		//fail-hard cutoff (fail high)
@@ -1976,8 +2021,12 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 	int hash_flag = hash_flag_alpha;
 
+	if (is_repetition()) return 0;
+
+	bool pv_node = (beta - alpha) > 1;
+
 	//read hash entry
-	if (ply && (score = read_hash_entry(alpha, beta, depth)) <= INF) {
+	if (ply && (score = read_hash_entry(alpha, beta, depth)) <= INF && !pv_node) {
 		return score;
 	}
 
@@ -1999,6 +2048,10 @@ static inline int negamax(int alpha, int beta, int depth) {
 		copyboard();
 		ply++;
 
+		repetition_index++;
+		repetition_table[repetition_index] = hash_key;
+
+
 		if (enpassant != no_sq) hash_key ^= enpassant_keys[enpassant];
 
 		//reset enpassant
@@ -2011,6 +2064,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 		score = -negamax(-beta, -beta + 1, depth - 1 - 2);
 
 		ply--;
+		repetition_index--;
 		takeback();
 
 		if (score >= beta) return beta;
@@ -2031,9 +2085,14 @@ static inline int negamax(int alpha, int beta, int depth) {
 		//preserve boards
 		copyboard();
 		ply++;
+
+		repetition_index++;
+		repetition_table[repetition_index] = hash_key;
+
 		//legal moves
 		if (make_move(moves[i], all_moves) == 0) {
 			ply--;
+			repetition_index--;
 			continue;
 		}
 
@@ -2076,6 +2135,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 		//if it was legal
 		ply--;
+		repetition_index--;
 		takeback();
 		moves_searched++;
 
@@ -2109,7 +2169,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 	}
 	if (legal_moves == 0) {
 		//king in check //+ply to find "closest mate"
-		if (in_check) return -INF + 1 + ply;
+		if (in_check) return -MATE + ply;
 		return 0;
 
 	}
@@ -2152,11 +2212,11 @@ void search_position(int depth) {
 		beta = score + 50;
 
 		//return best move
-		cout << "Best moves: ";
+		//cout << "Best moves: ";
 		for (int i = 0; i < pv_length[0]; i++) {
-			print_move(pv_table[0][i]);
+			//print_move(pv_table[0][i]);
 		}
-		cout << endl;
+		//cout << endl;
 	}
 }
 
@@ -2299,12 +2359,16 @@ int main() {
 	init_all();
 	parse_FEN(start_position);
 	print_board();
-	/*while (1) {
+	while (1) {
 		search_position(6);
+		if (pv_table[0][0] == 0) {
+			cout << "GG" << endl;
+			return 0;
+		}
 		make_move(pv_table[0][0], all_moves);
 		print_board();
-	}*/
-	search_position(7);
+	}
+	search_position(8);
 	cout << dec << nodes << endl;
 	return 0;
 }
