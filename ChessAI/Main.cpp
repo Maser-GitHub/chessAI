@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_map>
 #include <tuple>
+#include <string>
 
 using namespace std;
 
@@ -2359,11 +2360,11 @@ void search_position(int depth) {
 		beta = score + 50;
 
 		//return best move
-		//cout << "Best moves: ";
+		cout << "Best moves: ";
 		for (int i = 0; i < pv_length[0]; i++) {
-			//print_move(pv_table[0][i]);
+			print_move(pv_table[0][i]);
 		}
-		//cout << endl;
+		cout << endl;
 	}
 }
 
@@ -2533,18 +2534,17 @@ int main() {
 	U64 bitboard = 0ULL;
 	//init
 	init_all();
-	parse_FEN(start_position);
-	print_board();
+	parse_FEN("2R5/k7/4p3/6p1/2P4p/3nP3/3K2PP/8 w - - ");
+	char input[10];
 	while (1) {
-		search_position(6);
-		if (pv_table[0][0] == 0) {
-			cout << "GG" << endl;
-			return 0;
-		}
+		print_board();
+		search_position(8);
 		make_move(pv_table[0][0], all_moves);
 		print_board();
+		cin >> input;
+		make_move(parse_move(input), all_moves);
+
 	}
-	search_position(8);
 	cout << dec << nodes << endl;
 	return 0;
 }
